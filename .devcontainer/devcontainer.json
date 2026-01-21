@@ -1,0 +1,19 @@
+{
+  "name": "Fractale MCP Developer Environment",
+  "dockerFile": "Dockerfile",
+  "context": "../",
+
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+  },
+      "extensions": [
+        "ms-vscode.cmake-tools",
+        "golang.go",
+        "ms-python.python"
+      ]
+    }
+  },
+  "postStartCommand": "git config --global --add safe.directory /workspaces/fractale-mcp"
+}

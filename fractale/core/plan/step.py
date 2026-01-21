@@ -62,6 +62,11 @@ class Step:
         return self.spec.get("type", "agent")
 
     @property
+    def initial(self):
+        """Is this the start state?"""
+        return self.spec.get("initial", False)
+
+    @property
     def prompt(self):
         return self.spec.get("prompt")
 

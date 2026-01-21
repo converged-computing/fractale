@@ -2,6 +2,10 @@ import warnings
 
 # This file exists to silence a bunch of loud things.
 
+# Suppress jsonschema deprecation warnings from autogen
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="autogen")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="jsonschema")
+
 try:
     from pydantic import PydanticDeprecatedSince20
 

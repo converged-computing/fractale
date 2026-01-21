@@ -32,8 +32,8 @@ plan_schema = {
                     # Tool specific
                     "tool": {"type": "string"},
                     "allow_tools": {"type": "boolean", "default": True},
-                    "args": {"type": "object"},
                     "description": {"type": "string"},
+                    "args": {"type": "object"},
                     "inputs": {"type": "object", "additionalProperties": True},
                     # FSM Transitions
                     "transitions": {

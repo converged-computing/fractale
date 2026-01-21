@@ -3,7 +3,7 @@ steps:
    # The persona generates the Dockerfile
   - name: generate
     type: agent
-    prompt: "docker_build_persona_prompt"
+    prompt: "build_expert"
     instruction: You MUST choose a tool to build the dockerfile and verify success.
 
     # Inputs that can be passed forward to next steps

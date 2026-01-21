@@ -1,0 +1,12 @@
+server:
+  transport: http
+  port: 8089
+  host: "0.0.0.0"
+
+tools:
+  - path: hpc_mcp.t.build.docker.docker_build_container
+    name: build_container
+
+prompts:
+  - path: hpc_mcp.t.build.docker.docker_build_persona_prompt
+    name: build_expert

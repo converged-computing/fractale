@@ -302,3 +302,9 @@ class WorkerAgent(AgentBase):
         if hasattr(self.backend, "token_usage"):
             self.metadata["llm_usage"].append(self.backend.token_usage)
         # TODO: vsoch what to do with duration?
+
+
+# STOPPED HERE - debug this.
+# Can we use flux somehow to submit / then subscribe?
+# Why can't we give the llm total control (a firecracker vm or server)?
+# How do we build an orchestration state machine tool into flux based on dependncies? mcp?

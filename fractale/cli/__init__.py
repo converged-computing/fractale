@@ -56,43 +56,6 @@ def get_parser():
     )
     subparsers.add_parser("version", description="show software version")
 
-    # Start MCP workers
-    start = subparsers.add_parser(
-        "start",
-        formatter_class=argparse.RawTextHelpFormatter,
-        description="generate subsystem metadata for a cluster",
-    )
-    start.add_argument("tools", help="tools to start", nargs="*")
-    start.add_argument("--port", default=8000, type=int, help="port to run the agent gateway")
-
-    # Note from V: SSE is considered deprecated (don't use it...)
-    start.add_argument(
-        "-t",
-        "--transport",
-        default="stdio",
-        help="Transport to use (defaults to stdin)",
-        choices=["stdio", "http", "sse", "streamable-http"],
-    )
-    start.add_argument("--host", default="0.0.0.0", help="Host (defaults to 0.0.0.0)")
-    # TODO: we will want a more flexible discovery for mcp modules
-    start.add_argument(
-        "--tool-module",
-        action="append",
-        help="Additional tool module paths to discover from.",
-        default=[],
-    )
-    start.add_argument("--tool", action="append", help="Direct tool to import.", default=[])
-    start.add_argument("--resource", action="append", help="Direct resource to import.", default=[])
-    start.add_argument("--prompt", action="append", help="Direct prompt to import.", default=[])
-    start.add_argument("--include", help="Include tags", action="append", default=None)
-    start.add_argument("--exclude", help="Exclude tag", action="append", default=None)
-    start.add_argument(
-        "--mask-error_details",
-        help="Mask error details (for higher security deployments)",
-        action="store_true",
-        default=False,
-    )
-
     # Run an agent
     agent = subparsers.add_parser(
         "agent",
@@ -149,8 +112,6 @@ def run_fractale():
     # Here we can assume instantiated to get args
     if args.command == "agent":
         from .agent import main
-    elif args.command == "start":
-        from .start import main
     else:
         help(1)
     main(args, extra)

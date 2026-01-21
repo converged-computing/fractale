@@ -16,8 +16,8 @@ class CLIAdapter(UserInterface):
         """
         Called when a tool produces output, but the step isn't finished yet.
         """
-        # if len(content) > 500:
-        #    content = content[:500] + "..."
+        if len(content) > 500:
+            content = content[:500] + "..."
         print(content)
 
     def on_log(self, message, level="info"):
