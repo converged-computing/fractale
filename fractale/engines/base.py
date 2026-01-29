@@ -5,6 +5,14 @@ from fastmcp.client.transports import StreamableHttpTransport
 
 
 class AgentBase:
+    def reset(self, plan=None):
+        """
+        Reset the agent. Be careful if your model client is saving state here.
+        """
+        self.metadata = {"status": "pending", "times": {}, "steps": []}
+        if plan is not None:
+            self.plan = plan
+
     def init(self):
         """
         Setup the mcp client for the state machine. We use

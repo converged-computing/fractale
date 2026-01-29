@@ -11,6 +11,7 @@ from fractale.engines.autogen.backend import get_agent_config
 from fractale.engines.autogen.tools import register_mcp_capabilities
 from fractale.engines.base import AgentBase
 from fractale.utils.timer import Timer
+from fractale.ui.adapters.cli import CLIAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -26,11 +27,11 @@ class Manager(AgentBase):
     def __init__(self, plan, backend=None, ui=None, max_attempts=10, database=None):
         self.plan = plan
         self.backend = backend
-        self.ui = ui
+        self.ui = ui or CLIAdapter()
         self.max_attempts = max_attempts
         self.database = database
         self.client = None
-        self.metadata = {"status": "pending", "times": {}, "steps": []}
+        self.reset()
 
     def run(self, context):
         """
@@ -60,8 +61,7 @@ class Manager(AgentBase):
         except Exception as e:
             self.metadata["status"] = "Failed"
             logger.error(f"AutoGen Engine Failed: {e}")
-            if self.ui:
-                self.ui.on_workflow_complete("Failed")
+            self.ui.on_workflow_complete("Failed")
             raise e
 
     async def connect_and_validate(self):
@@ -109,8 +109,7 @@ class Manager(AgentBase):
 
                 # Safely get inputs
                 raw_inputs = step.spec.get("inputs") or {}
-                if self.ui:
-                    self.ui.on_step_start(step.name, step.description, raw_inputs)
+                self.ui.on_step_start(step.name, step.description, raw_inputs)
 
                 result = None
                 error = None
@@ -129,8 +128,7 @@ class Manager(AgentBase):
                     except Exception as e:
                         error = str(e)
 
-                if self.ui:
-                    self.ui.on_step_finish(step.name, str(result), error, {})
+                self.ui.on_step_finish(step.name, str(result), error, {})
 
                 if result and not error:
 
@@ -205,15 +203,11 @@ class Manager(AgentBase):
             "\n\n### TERMINATION PROTOCOL\n"
             "When you have completed the task and produced the final output:\n"
             "1. Output the result (e.g., the JSON or Text).\n"
-            "2. End your message with the exact phrase: MISSION COMPLETE\n"
-            "If you do not say MISSION COMPLETE, the workflow will continue."
+            "2. End your message with the exact phrase: WORKFLOW COMPLETE\n"
         )
         system_msg += protocol_footer
 
-        # Log update for UI to show full prompt
-        if self.ui and hasattr(self.ui, "on_set_prompt"):
-            self.ui.on_set_prompt(system_msg)
-
+        # AssistantAgent and ProxyAgent by default do not carry memory
         assistant = autogen.AssistantAgent(
             name="worker",
             system_message=system_msg,
@@ -222,13 +216,16 @@ class Manager(AgentBase):
 
         # Also define a function...
         def check_termination(msg):
+            """
+            Function to determine if we are done. Since we tell agent to
+            print that it is WORKFLOW COMPLETE we hope this janky text business
+            actually triggers.
+            """
             content = msg.get("content", "")
             if not content:
                 return False
             # Check for explicit completion or JSON object conclusion
-            if re.search("(COMPLETE|TERMINATE|FINISH)", content):
-                return True
-            return False
+            return re.search("(COMPLETE|TERMINATE|FINISH)", content) is not None
 
         # Safe retrieval of max_attempts
         step_inputs = step.spec.get("inputs") or {}
@@ -239,7 +236,6 @@ class Manager(AgentBase):
             human_input_mode="NEVER",
             code_execution_config=False,
             max_consecutive_auto_reply=max_replies,
-            # Use the strict checker
             is_termination_msg=check_termination,
         )
 

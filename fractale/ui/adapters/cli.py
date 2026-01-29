@@ -7,7 +7,6 @@ class CLIAdapter(UserInterface):
     """
     Basic command line client
     """
-
     def on_step_start(self, name, description, inputs):
         print(f"\n🚀 Step: {name}")
         print(f"   {description}")
