@@ -10,8 +10,8 @@ from fractale.core.context import get_context
 from fractale.engines.autogen.backend import get_agent_config
 from fractale.engines.autogen.tools import register_mcp_capabilities
 from fractale.engines.base import AgentBase
-from fractale.utils.timer import Timer
 from fractale.ui.adapters.cli import CLIAdapter
+from fractale.utils.timer import Timer
 
 logger = logging.getLogger(__name__)
 
