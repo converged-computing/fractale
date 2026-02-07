@@ -67,7 +67,7 @@ def get_parser():
         help="provide a plan to a manager",
     )
     agent.add_argument("--mode", choices=["cli", "tui", "web"], default="cli")
-    agent.add_argument("--engine", choices=["native", "langchain", "autogen"], default="native")
+    agent.add_argument("--engine", choices=["native", "langchain", "autogen"], default="autogen")
     agent.add_argument("--backend", choices=["openai", "gemini", "llama"], default="gemini")
     agent.add_argument("--database", help="URI for result storage (file://path or sqlite://path)")
     agent.add_argument(

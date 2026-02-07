@@ -32,6 +32,10 @@ TESTS_REQUIRES = (("pytest", {"min_version": "4.6.2"}),)
 AUTOGEN_REQUIRES = (
     ("ag2[openai]", {"min_version": None}),
     ("ag2[gemini]", {"min_version": None}),
+    ("autogen-agentchat", {"min_version": None}),
+    ("autogen-agentchat[gemini]", {"min_version": None}),
+    ("autogen-ext", {"min_version": None}),
+    ("autogen-ext[google]", {"min_version": None}),
     ("google-genai", {"min_version": None}),
     ("vertexai", {"min_version": None}),
 )

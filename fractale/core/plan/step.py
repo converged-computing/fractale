@@ -11,21 +11,21 @@ class Step:
 
     def __init__(self, spec):
         self.spec = spec
-        self._prompt_args = None
+        self.schema = None
 
-    def set_schema(self, valid_args: set):
+    def set_schema(self, schema: set):
         """
         Called by Manager after connecting to Server.
         Defines which arguments the Prompt function accepts.
         """
-        self._prompt_args = valid_args
+        self.schema = schema
 
     def partition_inputs(self, full_context: dict) -> tuple[dict, dict]:
         """
         Splits context into Direct Arguments vs Supplemental Context.
         """
         # Fallback if schema missing
-        if self._prompt_args is None:
+        if self.schema is None:
             return full_context, {}
 
         prompt_args = {}
@@ -44,7 +44,7 @@ class Step:
         }
 
         for key, value in full_context.items():
-            if key in self._prompt_args:
+            if key in self.schema:
                 prompt_args[key] = value
             elif key not in ignored:
                 background_info[key] = value

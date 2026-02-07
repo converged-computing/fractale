@@ -28,7 +28,7 @@ async def register_mcp_capabilities(assistant, user_proxy, client):
     original_sys_msg = assistant.system_message
     assistant.update_system_message(original_sys_msg + docs_text)
 
-    # Bridge functoin that autogen will actually call
+    # Bridge function that autogen will actually call
     async def execute_tool(
         tool_name: Annotated[str, "The name of the MCP tool to call"],
         arguments: Annotated[Dict[str, Any], "The arguments for the tool"],

@@ -33,7 +33,7 @@ The following variables can be set in the environment.
 ### Agents
 
 The `fractale agent` command provides means to run build, job generation, and deployment agents.
-In our [first version](https://github.com/compspec/fractale), an agent corresponded to a kind of task (e.g., build). For this refactored version, the concept of an agent is represented in a prompt or persona, which can be deployed by a generic MCP agent with some model backend (e.g., Gemini, Llama, or OpenAI).
+In our [first version](https://github.com/compspec/fractale), an agent corresponded to a kind of task (e.g., build). For this refactored version, the concept of an agent is represented in a prompt or persona, which can be deployed by a generic MCP agent with some model backend (e.g., Gemini, Llama, or OpenAI). For the framework, we were prototyping a state machine (native) approach, LangChain and AutoGen, and are choosing to start with just AutoGen. It isn't adding much aside from calling the tools, which is OK for now. The others will be returned to.
 
 ## Usage
 
@@ -86,14 +86,14 @@ To prototype with Flux, open the code in the devcontainer. Install the library a
 
 ```bash
 pip install -e .[all] --break-system-packages
-pip install flux-mcp IPython --break-system-packages
+pip install flux-mcp IPython mcp-serve --break-system-packages
 flux start
 ```
 
 We will need to start the server and add the validation functions and prompt. Start the server with the functions and prompt we need:
 
 ```bash
-mcpserver start --config ./examples/servers/jobspec.yaml
+mcpserver start --config ./examples/servers/flux-gemini.yaml
 ```
 
 **AutoGen**
@@ -101,21 +101,23 @@ mcpserver start --config ./examples/servers/jobspec.yaml
 Note that this needs to be run in an environment with Flux. I run both in the DevContainer.
 
 ```bash
-fractale agent --engine autogen ./examples/plans/transform-jobspec.yaml
+fractale agent --engine autogen ./examples/plans/transform-retry.yaml
 ```
 
 ### Design Choices
 
 Here are a few design choices (subject to change, of course). I am starting with re-implementing our fractale agents with this framework. For that, instead of agents being tied to specific functions (as classes on their agent functions) we will have a flexible agent class that changes function based on a chosen prompt. It will use mcp functions, prompts, and resources. In addition:
 
-- Each framework is (globally) an "engine" and this means the `Manager` class for each is under engine.py, since that is the entity running the show.
+- I am choosing to use autogen.AssistantAgent (older) over autogen_chatagent eqivalents (adds much more library dependency)
+- Each framework is (globally) an "engine" and this means the `Manager` class for each is under engine.py.
 - Tools hosted here are internal and needed for the library. E.g, we have a prompt that allows getting a final status for an output, in case a tool does not do a good job.
 - For those hosted here, we don't use mcp.tool (and associated functions) directly, but instead add them to the mcp manually to allow for dynamic loading.
+- We are currently focused on autogen (and the others, langchain and native, will need updates)
 - Tools that are more general are provided under extral libraries (e.g., flux-mcp and hpc-mcp)
 - The function docstrings are expose to the LLM (so write good ones!)
 - We can use mcp.mount to extend a server to include others, or the equivalent for proxy (I have not tested this yet).
 - Async is annoying but I'm using it. This means debugging is largely print statements and not interactive.
-- The backend of FastMCP is essentially starlette, so we define (and add) other routes to the server.
+- We use [mcp-server](https://github.com/converged-computing/mcp-server) as the MCP server.
 
 
 ## License

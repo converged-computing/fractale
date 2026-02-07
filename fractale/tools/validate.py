@@ -1,6 +1,6 @@
 import json
 import subprocess
-from typing import Any, Dict, Annotated
+from typing import Annotated, Any, Dict
 
 # We are hosting tools here that deviate a lot from a standard validation request.
 
