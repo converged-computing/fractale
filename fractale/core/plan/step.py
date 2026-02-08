@@ -54,6 +54,16 @@ class Step:
         return prompt_args, background_info
 
     @property
+    def arguments(self):
+        if "inputSchema" in self.schema:
+            return set(self.schema["inputSchema"]["properties"].keys())
+        return set([x["name"] for x in self.schema["arguments"]])
+
+    @property
+    def prefix(self):
+        return f"[[blue]{self.name}[/blue]]"
+
+    @property
     def name(self):
         return self.spec["name"]
 

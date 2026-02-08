@@ -72,6 +72,7 @@ class ColorizingStreamHandler(_logging.StreamHandler):
         if not self.nocolor and record.levelname in self.colors:
             message.insert(0, self.COLOR_SEQ % (30 + self.colors[record.levelname]))
             message.append(self.RESET_SEQ)
+        print("".join(message))
         return "".join(message)
 
 
@@ -112,7 +113,7 @@ class Logger:
         self.debug("{}: {info.filename}, {info.function}, {info.lineno}".format(msg, info=info))
 
     def info(self, message):
-        print(f"\n[bold cyan] {message}[/bold cyan]")
+        print(f"\n[bold cyan]{message}[/bold cyan]")
 
     def warning(self, msg):
         self.handler(dict(level="warning", msg=msg))
@@ -140,23 +141,26 @@ class Logger:
         Wrapper to add success to output for LLM.
         """
         return success(message)
-        # return "✅ SUCCESS: " + message
 
     def failure(self, message):
         """
         Wrapper to add success to output for LLM.
         """
         return error(message)
-        # return "❌ FAILED: " + message
 
     def custom(self, message, title, border_style=None, expand=True):
-        """
-        Custom message / title Panel.
-        """
         if not border_style:
             print(Panel(message, title=title, expand=expand))
         else:
             print(Panel(message, title=title, border_style=border_style, expand=expand))
+
+    def panel(self, message, title, color="green"):
+        """
+        Custom message / title Panel.
+        """
+        color = color.lower()
+        title = f"[{color}]Result Parser[/{color}]"
+        return self.custom(message, title, border_style=color)
 
     def text_handler(self, msg):
         """The default snakemake log handler.

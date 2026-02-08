@@ -1,3 +1,5 @@
+from rich import print
+
 from fractale.db import get_database
 from fractale.engines import get_engine
 
@@ -8,6 +10,7 @@ def main(args, extra, **kwargs):
     """
     # Prepare Context from Arguments
     context = vars(args)
+    result = None
 
     # Prepare a database for saving results (optional)
     database = get_database(args.database)
@@ -31,21 +34,23 @@ def main(args, extra, **kwargs):
             # The App takes ownership of the Engine.
             # It will instantiate TextualAdapter and assign it to engine.ui
             app = FractaleApp(engine, context)
-            app.run()
+            result = app.run()
 
         elif args.mode == "web":
             from fractale.ui.adapters.web import WebAdapter
 
             engine.ui = WebAdapter(url="http://localhost:3000")
-            engine.run(context)
+            result = engine.run(context)
 
         else:
             from fractale.ui.adapters.cli import CLIAdapter
 
             engine.ui = CLIAdapter()
-            engine.run(context)
+            result = engine.run(context)
 
     # Clean up or close database if relevant
     finally:
         if database:
             database.close()
+        elif result is not None:
+            print(result)

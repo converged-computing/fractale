@@ -2,40 +2,29 @@ import asyncio
 import logging
 import re
 import sys
+import warnings
 
 import autogen
 
 import fractale.engines.autogen.agents as helpers
 import fractale.engines.autogen.warnings  # noqa
-import fractale.utils as utils
 from fractale.core.context import get_context
 from fractale.engines.autogen.backend import get_agent_config
 from fractale.engines.autogen.tools import register_mcp_capabilities
 from fractale.engines.base import AgentBase
+from fractale.logger.logger import logger
 from fractale.ui.adapters.cli import CLIAdapter
 from fractale.utils.timer import Timer
 
-logger = logging.getLogger(__name__)
+# We are using legacy autogen - sorry.
+# warnings.filterwarnings("ignore", category=DeprecationWarning, module="jsonschema")
+# warnings.filterwarnings("ignore", category=DeprecationWarning, module="autogen")
+
 
 logging.getLogger("google.auth").setLevel(logging.ERROR)
 logging.getLogger("autogen").setLevel(logging.ERROR)
 
-
-# Errors and prompts, etc.
-termination_protocol = """### TERMINATION PROTOCOL
-When you have completed the task and produced the final output:
-1. Output the succinct result as instructed.
-2. End your message with the exact phrase: WORKFLOW COMPLETE"""
-
 init_msg = "Begin task.\n\nCONTEXT:\n%s"
-
-
-def check_termination(msg):
-    """
-    Function to determine if we are done. Jank.
-    """
-    content = msg.get("content", "")
-    return content and re.search("(COMPLETE|TERMINATE|FINISH)", content) is not None
 
 
 def format_context(d):
@@ -51,7 +40,7 @@ class Manager(AgentBase):
         self.plan = plan
         self.backend = backend
         self.ui = ui or CLIAdapter()
-        self.max_attempts = max_attempts or 10
+        self.max_attempts = max_attempts or 5
         self.database = database
         self.client = None
         self.reset()
@@ -72,15 +61,10 @@ class Manager(AgentBase):
         # Check that we have all tools/prompts we need
         asyncio.run(self.connect_and_validate())
 
-        # TODO we are missing the actual state machine transform her
-        # what to do on success vs. failure
-        # need a lookup of stuff.
-        # We also need a way to determine when something is successful or fail.
-
         try:
             self.metadata["status"] = "running"
             tracker = asyncio.run(self.run_loop(context))
-            self.metadata["status"] = "Succeeded"
+            self.metadata["status"] = "succeeded"
             self.save_results(tracker)
             self.ui.on_workflow_complete("Success")
             return tracker
@@ -96,39 +80,27 @@ class Manager(AgentBase):
         Connect and validate the client with the plan for both prompts and tools.
         """
         async with self.client:
-            server_prompts = await self.client.list_prompts()
-            p_list = (
-                server_prompts.prompts if hasattr(server_prompts, "prompts") else server_prompts
-            )
-            prompt_schema_map = {p.name: {a.name for a in (p.arguments or [])} for p in p_list}
+            prompts = await self.client.list_prompts()
+            p_list = prompts.prompts if hasattr(prompts, "prompts") else prompts
+            prompt_map = {p.name: p.dict() for p in p_list}
 
-            # 2. Fetch and map Tool schemas
-            server_tools = await self.client.list_tools()
-            t_list = server_tools.tools if hasattr(server_tools, "tools") else server_tools
+            tools = await self.client.list_tools()
+            t_list = tools.tools if hasattr(tools, "tools") else tools
+            tool_map = {t.name: t.dict() for t in t_list}
 
-            # MCP tools use JSON Schema in inputSchema.
-            # We extract the top-level property names for validation.
-            tool_schema_map = {}
-            for t in t_list:
-                schema = t.inputSchema if hasattr(t, "inputSchema") else {}
-                properties = schema.get("properties", {}).keys() if isinstance(schema, dict) else []
-                tool_schema_map[t.name] = set(properties)
-
-            # 3. Validate and set schemas on plan steps
+            # Validate and set schemas on plan steps
             for step in self.plan.states.values():
                 if step.type == "agent":
-                    if step.prompt in prompt_schema_map:
-                        step.set_schema(prompt_schema_map[step.prompt])
+                    if step.prompt in prompt_map:
+                        step.set_schema(prompt_map[step.prompt])
                     else:
                         sys.exit(f"⚠️  Prompt '{step.prompt}' not found on server during init.")
 
                 elif step.type == "tool":
-                    # Determine tool name from step (usually step.name or a tool attribute)
-                    tool_name = getattr(step, "tool", step.name)
-                    if tool_name in tool_schema_map:
-                        step.set_schema(tool_schema_map[tool_name])
+                    if step.tool in tool_map:
+                        step.set_schema(tool_map[step.tool])
                     else:
-                        sys.exit(f"⚠️  Tool '{tool_name}' not found on server during init.")
+                        sys.exit(f"⚠️  Tool '{step.tool}' not found on server during init.")
 
     async def get_helper_agents(self, cfg):
         """
@@ -205,9 +177,9 @@ class Manager(AgentBase):
                     break
 
                 # Prepare a prompt and get the inputs for a tool or prompt call
-                print(f"Generating Arguments for Step Call {step.name}")
+                logger.info(f"  Generating Arguments for Step Call {step.name}")
                 inputs = await agents["schema"].get_validated_arguments(step, context)
-                self.ui.on_step_start(step.name, step.description, inputs)
+                self.ui.log("🚀 {step.prefix} starting")
 
                 # For each call type we provide:
                 # 1. The step object (with full inputs, variables, etc.)
@@ -225,6 +197,11 @@ class Manager(AgentBase):
                 # We are requiring json all around.
                 self.ui.log(f"Transition options: {step.transitions}")
 
+                # Store raw previous result, update error
+                context[f"{step.name}_result"] = result
+                context.result = result
+                context.error = error
+
                 # Clean Markdown before JSON parsing
                 if result and not error:
 
@@ -232,28 +209,9 @@ class Manager(AgentBase):
                     # We get around issue of maybe not by telling agent can generate empty one
                     result = await agents["schema"].require_json(result)
 
-                    # We don't have a result, this is considered failure
-                    if not result:
-                        if self.fail(step, steps):
-                            break
-                        continue
-
                     # Otherwise, we succeeded
                     self.ui.on_step_finish(step.name, str(result), error, {})
-                    print("THIS IS THE RESULT")
-                    print(result)
-                    print("THIS IS THE CONTEXT")
-                    print(context)
-
-                    # Store raw previous result
-                    # TODO need a cleaner way to move between stuff here.
-                    context["previous_result"] = result
-                    context[f"{step.name}_result"] = result
-                    context.update(result)
-                    context.result = result
-
-                    if self.succeed(step, steps):
-                        break
+                    self.ui.log_update(result, title="Step Result")
 
                 tracker.append(
                     {
@@ -264,9 +222,13 @@ class Manager(AgentBase):
                     }
                 )
 
-                if error:
-                    raise RuntimeError(f"Step {step.name} failed: {error}")
-
+                # We don't have a result, this is considered failure
+                if not result:
+                    if self.fail(step, steps):
+                        break
+                else:
+                    if self.succeed(step, steps):
+                        break
         return tracker
 
     async def run_agent(self, step, cfg, args):
@@ -293,7 +255,15 @@ class Manager(AgentBase):
 
         # Inject extra instruction from plan, and termination protocol
         instruction += step.spec.get("instruction") or ""
-        instruction += termination_protocol
+        agents = await self.get_helper_agents(cfg)
+
+        # Terminate when we get a json load-able response
+        async def check_termination(msg):
+            try:
+                await asyncio.run(agents["schema"].require_json(msg))
+                return True
+            except Exception:
+                return False
 
         # AssistantAgent and ProxyAgent by default do not carry memory
         max_attempts = step.spec.get("max_attempts", self.max_attempts)
@@ -315,6 +285,7 @@ class Manager(AgentBase):
             await register_mcp_capabilities(assistant, user_proxy, self.client)
 
         # I am testing being more open here to give the agent MORE context
+        # Note that we need the user proxy since we are using initiate chat.
         result = await user_proxy.a_initiate_chat(
             assistant, message=init_msg % format_context(step.spec)
         )
@@ -329,8 +300,6 @@ class Manager(AgentBase):
         if not history:
             return ""
 
-        print("THIS IS THE HISTORY")
-        print(history)
         for msg in reversed(history):
             content = msg.get("content", "")
             role = msg.get("role", "")
@@ -366,6 +335,9 @@ class Manager(AgentBase):
         return str(result)
 
     def save_results(self, tracker):
+        """
+        Save results to some database interface.
+        """
         if not self.database:
             return
         data = {

@@ -5,9 +5,8 @@ from autogen import AssistantAgent
 from rich import print
 
 import fractale.utils as utils
+from fractale.logger.logger import logger
 from fractale.tools.calls import get_tool_prompt
-
-logger = logging.getLogger(__name__)
 
 # Error templates
 
@@ -76,14 +75,16 @@ class SchemaHelper:
         step_context = context.copy().data
         step_context.update(step.spec.get("inputs") or {})
 
-        # TODO this assumes that the options (the functions) do not change
+        # This assumes that the options (the functions) do not change
         # We need to redo the call to the server if they do
-        current_prompt = get_tool_prompt(step.name, step.type, list(step.schema), step_context)
-        print(current_prompt)
+        current_prompt = get_tool_prompt(step.name, step.type, step.schema, step_context)
+        logger.info(f"▶️ {step.prefix} Step Schema")
+        print(step.schema)
+        logger.panel(current_prompt[:1000], title="Generated Prompt for Arguments")
 
         while attempts < self.max_attempts:
             attempts += 1
-            logger.info(f"Attempt {attempts} to get validated arguments for {step.name}")
+            logger.info(f"🔄 {step.prefix} Attempt {attempts} to get validated arguments")
             message = {"content": current_prompt, "role": "user"}
 
             # pass the history to allow the agent to see previous errors
@@ -96,17 +97,17 @@ class SchemaHelper:
             # Something outside of schema?
             if not error:
                 # This is checking if there are keys in the args not in the schema
-                extra = set(args.keys()) - step.schema
+                extra = set(args.keys()) - step.arguments
                 if extra:
                     error = validation_error % (list(extra), list(step.schema))
 
             # No error, return arguments for call (tool or prompt)
             if not error:
-                logger.info(f"✅ Successfully validated arguments for {step.name}")
+                logger.info(f"✅ {step.prefix} Successfully validated arguments for {step.name}")
                 return args
 
             # If we are here, something went wrong. Ask the agent to fix it.
-            logger.warning(f"⚠️ Attempt {attempts} failed: {error}")
+            logger.warning(f"⚠️ {step.prefix} Attempt {attempts} failed: {error}")
 
             # Feed the error back as the next user prompt
             current_prompt = fix_error_prompt % error
@@ -125,7 +126,7 @@ class SchemaHelper:
         agent = agent or self.agent
         while attempts < self.max_attempts:
             attempts += 1
-            logger.info(f"Attempt {attempts} to get valid json for {agent}")
+            logger.info(f"🔄 Attempt {attempts} to get valid json for {agent}")
 
             # Allow for passing content response directly
             if isinstance(response, dict) and "content" in response:
@@ -136,7 +137,7 @@ class SchemaHelper:
 
             # No error, return arguments for call (tool or prompt)
             if not error:
-                logger.info(f"✅ Successfully parsed json for {agent}")
+                print(f"✅ Successfully parsed json for {agent}")
                 return args
 
             # If we are here, something went wrong. Ask the agent to fix it.

@@ -9,8 +9,7 @@ def get_tool_prompt(call_name: str, call_type: str, options: dict, context: dict
     """
     context = json.dumps(context)
     options = json.dumps(options)
-    text = f"""
-### PERSONA
+    text = f"""### PERSONA
 You are a {call_type} calling expert.
 
 ### CONTEXT
@@ -22,11 +21,11 @@ Here are variables available to you:
 
 {context}
 
-And here are variables you MUST include for the call:
+And here is metadata about the call. The matching you MUST do is for arguments.
 {options}
 
 ### INSTRUCTIONS
-1. Analyze the provided variables that must be included for the call.
+1. Analyze the provided arguments that must be included for the call.
 2. Select that subset from the previous provided context.
 3. Prepare a json structure with the subset
 

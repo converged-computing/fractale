@@ -2,7 +2,9 @@ PERSONA = "You are a job specification generation expert."
 CONTEXT = "We need to convert between workload manager job specification formats."
 
 
-def get_transform_text(script, to_manager, from_manager, fmt="batch", error=None):
+def get_transform_text(
+    script, to_manager, from_manager, fmt="batch", error: str = None, previous: str = None
+):
     """
     Get prompt text for an initial build.
     """
@@ -10,8 +12,10 @@ def get_transform_text(script, to_manager, from_manager, fmt="batch", error=None
     goal = """I need to convert the provided job specification from '{from_manager}' to '{to_manager}'.
 The desired output format is a '{fmt}' script."""
     if error is not None:
-        goal = f"""You previously attempted to convert a job specification and it did not validate. Analyze the error and fix it
-{error}"""
+        goal = f"""You previously attempted to convert a job specification and it did not validate. Analyze the error and fix it:
+Error: {error}"""
+        if previous is not None:
+            goal += f"Attempt: \n{previous}"
 
     return f"""
 ### PERSONA
@@ -38,7 +42,12 @@ If there is a directive that does not translate, you MUST leave it out and add a
 
 
 def transform_jobspec_expert(
-    script: str, from_manager: str, to_manager: str, fmt: str = "batch", error: str = None
+    script: str,
+    from_manager: str,
+    to_manager: str,
+    fmt: str = "batch",
+    error: str = None,
+    previous: str = None,
 ):
     """
     Generate a prompt to transform FROM a particular workload manager TO a particular workload manager.
@@ -50,6 +59,10 @@ def transform_jobspec_expert(
       from_manager (str): The name of the manager to convert FROM.
       to_manager (str): The name of the job manager to convert TO.
       fmt (str): one of "batch" or "jobspec" for a Flux canonical jobspec (in json)
+      error (str): if a previous attempt was made, include the error message.
+      previous (str): if a previous attempt was made with error, jobspec for inspection.
     """
-    prompt_text = get_transform_text(script, to_manager, from_manager, fmt="batch", error=error)
+    prompt_text = get_transform_text(
+        script, to_manager, from_manager, fmt="batch", error=error, previous=previous
+    )
     return {"messages": [{"role": "user", "content": {"type": "text", "text": prompt_text}}]}
