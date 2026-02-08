@@ -1,13 +1,19 @@
-import asyncio
-import logging
-import re
-import sys
 import warnings
 
+# We are using legacy autogen - sorry.
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="jsonschema")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="autogen")
+
+import asyncio
+import logging
+import sys
+
 import autogen
+from rich import print
 
 import fractale.engines.autogen.agents as helpers
 import fractale.engines.autogen.warnings  # noqa
+import fractale.utils as utils
 from fractale.core.context import get_context
 from fractale.engines.autogen.backend import get_agent_config
 from fractale.engines.autogen.tools import register_mcp_capabilities
@@ -16,19 +22,27 @@ from fractale.logger.logger import logger
 from fractale.ui.adapters.cli import CLIAdapter
 from fractale.utils.timer import Timer
 
-# We are using legacy autogen - sorry.
-# warnings.filterwarnings("ignore", category=DeprecationWarning, module="jsonschema")
-# warnings.filterwarnings("ignore", category=DeprecationWarning, module="autogen")
-
-
 logging.getLogger("google.auth").setLevel(logging.ERROR)
 logging.getLogger("autogen").setLevel(logging.ERROR)
 
 init_msg = "Begin task.\n\nCONTEXT:\n%s"
+termination_instruction = (
+    "\nWhen you have completed the step, you MUST write STEP COMPLETE in your output."
+)
 
 
 def format_context(d):
     return "\n".join([f"{k}: {v}" for k, v in d.items() if not k.startswith("_")])
+
+
+def check_termination(message):
+    """
+    Checks if the message content indicates termination
+    """
+    if isinstance(message, dict):
+        content = message.get("content", "")
+        return "STEP COMPLETE" in content
+    return False
 
 
 class Manager(AgentBase):
@@ -178,8 +192,14 @@ class Manager(AgentBase):
 
                 # Prepare a prompt and get the inputs for a tool or prompt call
                 logger.info(f"  Generating Arguments for Step Call {step.name}")
-                inputs = await agents["schema"].get_validated_arguments(step, context)
-                self.ui.log("🚀 {step.prefix} starting")
+
+                # inputs = await agents["schema"].get_validated_arguments(step, context)
+                inputs = utils.resolve_templates(
+                    inputs=step.spec.get("inputs", {}), context=context, schema=step.arguments
+                )
+
+                # This doesn't work super well for longer stuff.
+                self.ui.log(f"🚀 {step.prefix} starting")
 
                 # For each call type we provide:
                 # 1. The step object (with full inputs, variables, etc.)
@@ -190,16 +210,15 @@ class Manager(AgentBase):
                         if step.type == "agent":
                             result = await self.run_agent(step, cfg, inputs)
                         elif step.type == "tool":
-                            result = await self.run_tool(step, cfg, inputs)
+                            result = await self.run_tool(step, inputs)
                     except Exception as e:
                         error = str(e)
+                        logger.error(error)
 
                 # We are requiring json all around.
                 self.ui.log(f"Transition options: {step.transitions}")
 
                 # Store raw previous result, update error
-                context[f"{step.name}_result"] = result
-                context.result = result
                 context.error = error
 
                 # Clean Markdown before JSON parsing
@@ -207,11 +226,17 @@ class Manager(AgentBase):
 
                     # This assumes there is a parseable result
                     # We get around issue of maybe not by telling agent can generate empty one
-                    result = await agents["schema"].require_json(result)
+                    result = agents["schema"].require_json(result)
+                    context[f"{step.name}_result"] = result
+                    context.result = result
 
                     # Otherwise, we succeeded
                     self.ui.on_step_finish(step.name, str(result), error, {})
                     self.ui.log_update(result, title="Step Result")
+
+                else:
+                    context[f"{step.name}_result"] = result
+                    context.result = result
 
                 tracker.append(
                     {
@@ -223,7 +248,7 @@ class Manager(AgentBase):
                 )
 
                 # We don't have a result, this is considered failure
-                if not result:
+                if not result and not error:
                     if self.fail(step, steps):
                         break
                 else:
@@ -239,7 +264,8 @@ class Manager(AgentBase):
         to do. If we do not have a prompt we are just explicitly calling a tool.
         """
         logger.info(f"📥 Fetching Persona: {step.prompt}")
-
+        self.ui.print(f"  ☎️  Inputs to Prompt Call: {args}")
+        self.ui.print(f"  📜  Prompt Schema: {step.schema}")
         try:
             response = await self.client.get_prompt(step.prompt, arguments=args)
             instruction = "\n\n".join(
@@ -255,15 +281,7 @@ class Manager(AgentBase):
 
         # Inject extra instruction from plan, and termination protocol
         instruction += step.spec.get("instruction") or ""
-        agents = await self.get_helper_agents(cfg)
-
-        # Terminate when we get a json load-able response
-        async def check_termination(msg):
-            try:
-                await asyncio.run(agents["schema"].require_json(msg))
-                return True
-            except Exception:
-                return False
+        instruction += termination_instruction
 
         # AssistantAgent and ProxyAgent by default do not carry memory
         max_attempts = step.spec.get("max_attempts", self.max_attempts)
@@ -276,6 +294,7 @@ class Manager(AgentBase):
             name="user_proxy",
             human_input_mode="NEVER",
             code_execution_config=False,
+            silent=True,
             is_termination_msg=check_termination,
             max_consecutive_auto_reply=max_attempts,
         )
@@ -283,6 +302,7 @@ class Manager(AgentBase):
         # If we allow tools, the agent can see (and use and call) them
         if getattr(step, "allow_tools", True):
             await register_mcp_capabilities(assistant, user_proxy, self.client)
+            print("  ⚒️  Tools are allowed.")
 
         # I am testing being more open here to give the agent MORE context
         # Note that we need the user proxy since we are using initiate chat.
@@ -323,12 +343,15 @@ class Manager(AgentBase):
 
         return chat_res.summary
 
-    async def run_tool(self, step, cfg, args):
+    async def run_tool(self, step, args):
         """
         Run a direct tool.
         """
         tool_name = step.tool
         logger.info(f"🛠️ AutoGen Manager executing tool: {tool_name}")
+        self.ui.print(f"  ☎️  Inputs to Tool Call: {args}")
+        self.ui.print(f"  📜  Tool Schema: {step.schema}")
+
         result = await self.client.call_tool(tool_name, args)
         if hasattr(result, "content") and result.content:
             return result.content[0].text

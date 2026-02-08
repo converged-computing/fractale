@@ -62,7 +62,7 @@ class SchemaHelper:
             error = json_decode_error % str(e)
         return args, error
 
-    async def get_validated_arguments(self, step, context):
+    async def get_validated_arguments(self, step, context, inputs=None):
         """
         This is the main purpose of this schema helper agent.
         Executes a loop with the agent to get valid JSON arguments.
@@ -78,6 +78,13 @@ class SchemaHelper:
         # This assumes that the options (the functions) do not change
         # We need to redo the call to the server if they do
         current_prompt = get_tool_prompt(step.name, step.type, step.schema, step_context)
+
+        # Did we make a prevoius attempt and need help?
+        if inputs is not None:
+            current_prompt += (
+                "\nYou made a previous attempt and the tool call was malformed:\n{inputs}"
+            )
+
         logger.info(f"▶️ {step.prefix} Step Schema")
         print(step.schema)
         logger.panel(current_prompt[:1000], title="Generated Prompt for Arguments")
@@ -117,10 +124,14 @@ class SchemaHelper:
             f"Failed to get valid arguments for '{step.name}' after {self.max_attempts} attempts."
         )
 
-    async def require_json(self, response, agent=None, max_attempts=None):
+    def require_json(self, response, agent=None, max_attempts=None):
         """
         Helper parser agent that will retry if the json result does not parse.
         """
+        # Exit early if we have a dictionary already
+        if isinstance(response, dict):
+            return response
+
         attempts = 0
         max_attempts = max_attempts or self.max_attempts
         agent = agent or self.agent
