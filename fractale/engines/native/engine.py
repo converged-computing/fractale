@@ -1,10 +1,14 @@
+import asyncio
+import json
 import os
 from datetime import datetime
 
 import fractale.utils as utils
 from fractale.core.context import get_context
-from fractale.engines.native.result import parse_tool_response
+from fractale.engines.native.result import parse_response
 from fractale.logger import logger
+from fractale.tools.calls import check_tool_call
+from fractale.ui.adapters.cli import CLIAdapter
 
 from .agent import AgentBase, WorkerAgent
 from .state_machine import WorkflowStateMachine
@@ -21,7 +25,7 @@ class Manager(AgentBase):
         self, plan, ui=None, results_dir=None, max_attempts=10, backend="gemini", database=None
     ):
         self.plan = plan
-        self.ui = ui
+        self.ui = ui or CLIAdapter()
 
         # TODO: this is not exposed
         self.results_dir = results_dir or os.getcwd()
@@ -31,14 +35,15 @@ class Manager(AgentBase):
         self.database = database
         self.metadata = {"status": "Pending"}
         self.init()
+        # helper agent for various tasks
+        self.init_helper()
 
-    def run(self, context_input):
+    def run(self, context):
         """
         Main entry point.
         Merges inputs, validates against server, and starts FSM loop.
         """
-        context = get_context(context_input)
-        context.managed = True
+        context = get_context(context)
 
         # Global inputs from plan
         for k, v in self.plan.global_inputs.items():
@@ -46,9 +51,7 @@ class Manager(AgentBase):
                 context[k] = v
 
         # Connect and validate against server
-        # We use run_sync to bridge the async validation method
-        # God I hate asyncio
-        utils.run_sync(self.connect_and_validate())
+        asyncio.run(self.connect_and_validate())
 
         # Setup State Machine Engine
         # The manager here creates a state machine
@@ -60,31 +63,29 @@ class Manager(AgentBase):
             ui=self.ui,
         )
 
-        logger.info(
-            f"State Machine Initialized: {len(self.plan.states)} states. Start {sm.current_state_name}"
-        )
+        logger.info(f"✅ State Machine Initialized: {len(self.plan.states)} states.")
         self.metadata["status"] = "running"
 
         # Start Execution Loop
         tracker = []
         try:
             while True:
-                step_meta, finished = sm.run_cycle()
-                if step_meta:
-                    tracker.append(step_meta)
+                result = sm.run_cycle()
+                tracker.append(result)
 
                 # Are we done? We need to break from True
-                if finished:
-                    self.metadata["status"] = sm.current_state_name
-                    self.ui.log_workflow_complete(sm.current_state_name)
+                self.metadata["status"] = result["state"]
+                if result["state"] == "complete":
+                    self.ui.log_workflow_complete(result["state"])
                     break
 
                 # Ask user what to do next
-                action = sm.ask_next_step(step_meta)
+                if result["state"] == "ask":
+                    action = sm.ask_next_step(result)
 
-                # Implied action retry is a continue
-                if action == "quit":
-                    break
+                    # Implied action retry is a continue
+                    if action == "quit":
+                        break
 
             # Save and return
             self.save_results(tracker)
@@ -95,104 +96,78 @@ class Manager(AgentBase):
             logger.error(f"Orchestration failed: {e}")
             raise e
 
+    def init_helper(self):
+        self.agent = WorkerAgent(name="state-machine-helper", ui=self.ui)
+        self.agent.init()
+        self.agent.init_backend()
+
     def run_agent(self, step, context):
         """
         Runs the WorkerAgent for an 'agent' type step.
         """
-        self.ui.log_start(step.name, step.description, step.spec.get("inputs", {}))
-        if not hasattr(context, "agent_config"):
-            context.agent_config = {}
-
-        context.agent_config.update(
-            {
-                "step_ref": step,
-                "source_prompt": step.prompt,
-                "step_name": step.name,
-                "tool": step.spec.get("tool"),
-            }
-        )
+        # Prefer step limit, fallback to global manager limit
+        max_attempts = step.spec.get("inputs", {}).get("max_attempts", self.max_attempts)
 
         # The worker agent will work on successfully executing a step
         agent = WorkerAgent(
             name=step.name,
             step=step,
-            # Prefer step limit, fallback to global manager limit
-            max_attempts=step.spec.get("inputs", {}).get("max_attempts", self.max_attempts),
+            max_attempts=max_attempts,
             ui=self.ui,
         )
-
-        try:
-            result_ctx = agent.run(context)
-            result = result_ctx.get("result")
-            error = result_ctx.get("error_message")
-            self.ui.log_finish(step.name, result, error, agent.metadata)
-            return result, error, agent.metadata
-
-        except Exception as e:
-            self.ui.log_finish(step.name, None, str(e), agent.metadata)
-            return None, str(e), agent.metadata
+        return agent.run(context)
 
     def run_tool(self, step, context=None):
         """
         Runs a deterministic Tool directly (no LLM).
         """
-        self.ui.log_start(step.name, step.description, step.spec.get("args", {}))
-
+        logger.info(step.name)
         tool_name = step.tool
         start_time = datetime.now()
-        tool_args = utils.resolve_templates(step.spec.get("args", {}), context)
+        tool_args = utils.resolve_templates(
+            inputs=step.spec.get("inputs", {}), context=context, schema=step.arguments
+        )
+        logger.info(f"🛠️  Executing Tool: {tool_name}")
 
+        async def call():
+            async with self.client:
+                return await self.client.call_tool(tool_name, tool_args)
+
+        raw_result = utils.run_sync(call())
+        duration = (datetime.now() - start_time).total_seconds()
+        metrics = {"duration": duration, "tool": tool_name}
+        result = parse_response(raw_result, metrics)
+        result.show()
+
+        # Ask an agent what the outcome is
+        decision = {}
+        while "result" not in decision:
+            decision = self.check_tool_call(tool_name, result, decision)
+        return result
+
+    def check_tool_call(self, tool_name, result, decision):
+        """
+        Check a tool call for an error and get a transition decision.
+        """
+        check = check_tool_call(tool_name, result.content)
+        logger.panel(check, "Tool Check Request")
+        decision, _, _ = self.agent.backend.generate_response(
+            prompt=check, use_tools=False, memory=True
+        )
         try:
-            logger.info(f"🛠️ Executing Tool: {tool_name}")
+            decision = json.loads(utils.get_code_block(decision))
+        except:
+            return {}
 
-            async def call():
-                async with self.client:
-                    return await self.client.call_tool(tool_name, tool_args)
+        # The reason is an added error, if the LLM determines there is one
+        if "reason" in decision and decision["reason"]:
+            result.add_error(decision["reason"])
 
-            raw_result = utils.run_sync(call())
-            parsed = parse_tool_response(raw_result)
-            self.ui.log_update(parsed.content)
-            self.ui.log_finish(step.name, parsed.content, parsed.error_message, {})
+        # The result dictates the transition
+        if "result" in decision and decision["result"] in ["success", "failure"]:
+            result.transition = decision["result"]
 
-            duration = (datetime.now() - start_time).total_seconds()
-            meta = {"duration": duration, "tool": tool_name}
-            return parsed.content, parsed.error_message, meta
-
-        except Exception as e:
-            self.ui.log_finish(step.name, None, str(e), {})
-            return None, str(e), {}
-
-    async def connect_and_validate(self):
-        """
-        Async helper to setup client and check server capabilities.
-        """
-        async with self.client:
-            server_prompts_page = await self.client.list_prompts()
-
-            if hasattr(server_prompts_page, "prompts"):
-                prompts_list = server_prompts_page.prompts
-            else:
-                prompts_list = server_prompts_page
-
-            schema_map = {}
-            available_names = set()
-
-            for p in prompts_list:
-                available_names.add(p.name)
-                args = {arg.name for arg in p.arguments} if p.arguments else set()
-                schema_map[p.name] = args
-
-            logger.info(f"🔎 Validating {len(self.plan.states)} states against server...")
-
-            for step in self.plan.states.values():
-                if step.type == "agent":
-                    if step.prompt not in available_names:
-                        raise ValueError(
-                            f"❌ Plan Error: Unknown Persona '{step.prompt}' in step '{step.name}'"
-                        )
-                    step.set_schema(schema_map[step.prompt])
-
-            logger.info("✅ Personas validated and schemas synced.")
+        return decision
 
     def save_results(self, tracker):
         """
@@ -200,12 +175,10 @@ class Manager(AgentBase):
         """
         if not self.database:
             return
-
         data = {
             "steps": tracker,
             "plan_source": self.plan.plan_path,
             "status": self.metadata.get("status"),
             "metadata": self.metadata,
         }
-
         self.database.save(data)

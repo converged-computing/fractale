@@ -1,16 +1,17 @@
+import asyncio
 import json
-import re
 import time
 
 from rich import print
 
 # Native Engine Imports
 import fractale.engines.native.backends as backends
+import fractale.engines.native.result as results
 import fractale.utils as utils
 from fractale.core.config import ModelConfig
 from fractale.engines.base import AgentBase
-from fractale.engines.native.result import parse_tool_response
-from fractale.logger import logger
+from fractale.logger.logger import logger
+from fractale.tools.calls import check_call
 
 
 class WorkerAgent(AgentBase):
@@ -20,7 +21,7 @@ class WorkerAgent(AgentBase):
     No inheritance from global base classes.
     """
 
-    def __init__(self, name: str, step, ui=None, max_attempts=None):
+    def __init__(self, name: str, step=None, ui=None, max_attempts=None):
         self.name = name
 
         # The agent is responsible for a step.
@@ -34,96 +35,75 @@ class WorkerAgent(AgentBase):
             "status": "pending",
             "times": {},
             "steps": [],
-            "llm_usage": [],
         }
 
     def run(self, context):
         """
         Main entry point called by the Manager.
-        Synchronous wrapper around the async execution loop.
+
+        run -> run_loop (prompt) -> process_loop (inner loop)
         """
-        self.ui.log(f"▶️  '{self.name}' starting...")
         start_time = time.time()
         self.metadata["status"] = "running"
 
-        # The manager adds the step.prmopt as source prompt here
-        prompt_name = context.agent_config.get("source_prompt")
-        if not prompt_name:
-            raise ValueError(f"Worker {self.name} missing 'source_prompt' in context.")
+        # Setup fastmcp client and choose a backend (before async)
+        self.init()
+        self.init_backend(context)
 
         try:
-            result = utils.run_sync(self.run_async(prompt_name, context))
-            context.result = result
+            result = asyncio.run(self.run_loop(self.step.prompt, context))
             self.metadata["status"] = "success"
 
         except Exception as e:
             self.metadata["status"] = "failed"
-            context.error_message = str(e)
-            self.ui.log(f"Worker '{self.name}' failed: {e}")
-            raise e
+            result = results.StepResult(str(e))
 
         finally:
             self.metadata["times"]["execution"] = time.time() - start_time
 
-        return context
+        result.show()
+        return result
 
-    async def run_async(self, prompt_name: str, context):
+    async def run_loop(self, prompt, context):
         """
         Sets up connections and runs the async loop.
         """
-        start_exec = time.time()
-
-        # Setup fastmcp client and choose a backend
-        self.init()
-        self.init_backend(context)
-
         async with self.client:
 
-            # Get tools available for running session.
-            mcp_tools = await self.client.list_tools()
-            await self.backend.initialize(mcp_tools)
-
             # Derive the persona (prompt) from mcp server.
-            context_data = getattr(context, "data", context)
-            prompt_args, remainder = self.step.partition_inputs(context_data)
-            instruction = await self.fetch_persona(prompt_name, prompt_args)
+            inputs = utils.resolve_templates(
+                inputs=self.step.spec.get("inputs", {}), context=context, schema=self.step.arguments
+            )
+            instruction = await self.fetch_persona(prompt, inputs)
 
             # Since we are moving between steps, add the context
-            instruction += self.add_context(instruction, remainder)
+            # instruction += self.add_context(instruction, remainder)
 
             # Once we get here, we have a specific instruction (with a persona)
             # And we want to allow the agent to work on the task in a loop
-            response = await self.run_loop(instruction, context)
+            response = await self.process_loop(instruction, context)
 
-        self.record_usage(time.time() - start_exec)
         return response
 
-    def add_context(self, instruction, context_dict):
+    def add_context(self, instruction, context):
         """
         Appends the Blackboard variables to the system prompt so the LLM knows the state of the world.
         """
-        if not context_dict:
+        if not context:
             return instruction
 
         info = "\n\n### SHARED CONTEXT\n"
-        info += "The following variables are available from previous steps:\n\n"
+        info += "The following variables are available from inputs and previous steps:\n\n"
 
-        for k, v in context_dict.items():
-            # Skip system keys if any leaked through
-            if k.startswith("_") and k != "_previous_result":
-                continue
-
-            # Format value nicely
+        for k, v in context.items():
             if isinstance(v, (dict, list)):
                 val_str = json.dumps(v, indent=2)
             else:
                 val_str = str(v)
-
             info += f"- **{k}**: {val_str}\n"
-
         return instruction + info
 
-    def init_backend(self, context):
+    def init_backend(self, context=None):
         """
         Create the backend from the model config.
         """
@@ -132,179 +112,128 @@ class WorkerAgent(AgentBase):
             raise ValueError(f"Provider '{cfg.provider}' not supported.")
         self.backend = backends.BACKENDS[cfg.provider](config=cfg)
 
-    async def fetch_persona(self, prompt_name, arguments):
+    async def fetch_persona(self, prompt, arguments):
         """
         Calls MCP Server to render the prompt string.
+
+        This sets the personality of the agent.
         """
-        log_msg = f"📥 Persona: {prompt_name}"
-        if self.ui:
-            self.ui.log(log_msg)
-        else:
-            logger.info(log_msg)
+        self.ui.log(f"📥 Persona: {prompt}")
 
         try:
-            result = await self.client.get_prompt(name=prompt_name, arguments=arguments)
-
+            result = await self.client.get_prompt(name=prompt, arguments=arguments)
             msgs = [
                 m.content.text if hasattr(m.content, "text") else str(m.content)
                 for m in result.messages
             ]
-            text = "\n\n".join(msgs)
 
-            # Add user custom instruction (note does not support jinja)
-            text += self.step.spec.get("instruction") or ""
-            return text
+            # Get generated prompt and add custom user instruction
+            return "\n\n".join(msgs) + (self.step.spec.get("instruction") or "")
         except Exception as e:
-            raise RuntimeError(f"Failed to fetch persona '{prompt_name}': {e}")
+            raise RuntimeError(f"Failed to fetch persona '{prompt}': {e}")
 
-    async def run_loop(self, instruction, context):
+    def show_instruction(self, instruction):
         """
-        Process -> Tool -> Process loop.
+        Show instruction up to 500 characters
+        """
+        instruction = self.get_instruction(instruction)
+        if len(instruction) > 800:
+            instruction = instruction[:800] + " ... "
+        logger.panel(instruction, title="Agent Instruction")
+
+    def get_instruction(self, instruction):
+        return json.loads(instruction)["messages"][0]["content"]["text"].strip()
+
+    async def process_loop(self, instruction, context):
+        """
         We need to return on some state of success or ultimate failure.
         """
         max_loops = context.get("max_attempts") or self.max_attempts
-        step = context.agent_config["step_ref"]
         loops = 0
+        result = None
 
         # Are we allowed to use tools?
-        use_tools = step.allow_tools
+        use_tools = self.step.allow_tools
 
         # If tool is set, we might force the model to one tool.
         # Obviously the use_tools needs to be true here.
-        chosen_tool = context.agent_config.get("tool")
-        if chosen_tool:
+        if self.step.tool is not None:
             use_tools = True
 
         while loops < max_loops:
+            # Start counting at 1. Like Matlab
             loops += 1
-            self.ui.log(f"🧠 Loop {loops}/{max_loops}")
-            print(instruction)
+            self.ui.log(f"🧠 Loop {loops}/{max_loops} [tools: {use_tools}]")
+            self.show_instruction(instruction)
 
-            response, reason, calls = self.backend.generate_response(
+            # This is making an agentic call, with or without tools
+            response, metrics, calls = self.backend.generate_response(
                 prompt=instruction,
                 use_tools=use_tools,
-                tools=[chosen_tool] if chosen_tool else None,
+                tools=self.step.tools,
+                # Use memory so we remember the initial prompt
+                memory=True,
             )
 
-            self.ui.log(reason)
-            if response:
-                self.ui.log(response, do_handle=False) or logger.info(f"🤖 Thought: {response}")
-
-            if not calls and chosen_tool:
-
-                # Try to extract arguments (usually code) from the text response
-                args = self.extract_code_block(response)
-                if args:
-                    msg = f"⚡ Auto-triggering tool: {chosen_tool}"
-                    self.ui.log(msg)
-
-                    # Prepare arguments.
-                    # If extraction returned a dict, use it.
-                    # If string, we might need to map it to a specific key (e.g. dockerfile)
-                    # For now, assuming extract_code_block returns the arguments structure required.
-                    calls = [{"name": chosen_tool, "args": args, "id": "implicit-val"}]
-
-            # Stopping Condition
-            elif not calls:
-                self.ui.log("🛑 Agent finished (No tools called).")
-                return response
-
-            tool_outputs = []
-            has_global_error = False
+            # Quick return if no tools
+            if not calls:
+                output = utils.get_code_block(response)
+                return results.parse_response(output, metrics)
 
             # Process all calls (Parallel tool use support)
+            # TODO: we should set the error and result on the context, and
+            # tell the memory agent that
+            tool_results = []
             for call in calls:
                 t_name = call["name"]
                 t_args = call["args"]
-                t_id = call.get("id")
-                self.ui.log(f"🛠️  Calling: {t_name}")
+                self.ui.log(f"🛠️  Calling: {t_name} with args {t_args}")
 
-                try:
-                    raw_result = await self.client.call_tool(t_name, t_args)
-                    parsed = parse_tool_response(raw_result)
-                    content = parsed.content
+                result = await self.client.call_tool(t_name, t_args)
+                result = results.parse_response(result, metrics)
+                call["result"] = result.content
 
-                    if parsed.is_error:
-                        has_global_error = True
-                        if "❌" not in content and "Error" not in content:
-                            content = f"❌ ERROR: {content}"
+                # Give the agent the tool result and ask to continue or return
+                tool_results.append(call)
 
-                except Exception as e:
-                    content = f"❌ ERROR: {e}"
-                    has_global_error = True
+            if tool_results:
+                check = check_call(tool_results)
+                instruction = (
+                    '{"messages":[{"role":"user","content":{"type":"text","text": "%s"}}]}' % check
+                )
 
-                # Record and UI Update
-                self.record_step(t_name, t_args, content)
-                self.ui.log_update(content)
-                tool_outputs.append({"id": t_id, "name": t_name, "content": content})
+            # No error?
+            elif not result.error:
+                print(f"{self.tep.prefix} There was no error.")
+                break
 
-            # If we used a specific tool, checking the result is often enough
-            if chosen_tool and not has_global_error:
-                return tool_outputs[-1]["content"]
+            # If there is an error, we update the instruction to show it, or run out of loops and exit
+            print(f"{self.step.prefix} There WAS an error.")
+            # TODO: we need an analyzer debug agent to look at the possible error.
+            instruction = (
+                '{"messages":[{"role":"user","content":{"type":"text","text": "%s"}}]}'
+                % result.error
+            )
 
-            # Otherwise, ask the LLM if we are we done
-            try:
-                # We dump the outputs into the check prompt
-                # TODO: if this isn't accurate, we should have an error code.
-                # and then fall back to this.
-                check_args = {"content": json.dumps([t["content"] for t in tool_outputs])}
-                next_instruction = await self.fetch_persona("check_finished_prompt", check_args)
+            # TODO need to work on this part - it does not work correctly yet. Instead we are not allowing tools for now
 
-                # The prompt asks the LLM to output a JSON decision
-                decision, _, _ = self.backend.generate_response(prompt=next_instruction)
+            # If this is the first time we've used the model, add the original instruction.
+            # After this chat is created, the instruction should endure in memory
+            # first_check = self.backend._chat_no_tools is None
+            # if first_check:
+            #    check += f"\nHere is the original prompt:\n{self.get_instruction(instruction)}"
+            # logger.panel(check, "Agent Check Request")
 
-                # Parse decision
-                decision = json.loads(self.extract_code_block(decision))
-                print(decision)
+            # Get the decision to parse. This will be a new chat
+            # decision, _, _ = self.backend.generate_response(
+            #    prompt=check,
+            #    use_tools=False,
+            #    memory=True
+            # )
+            # decision = json.loads(utils.get_code_block(decision))
+            # if decision['decision'] == "retry":
+            #    instruction = f"That response was invalid. Here are the issues:\n{result.error}"
+            #    instruction = '{"messages":[{"role":"user","content":{"type":"text","text": instruction}}]}'
+            #    break
 
-                # Return last output as result
-                if decision.get("action") == "success":
-                    return tool_outputs[-1]["content"]
-
-                # TODO this isn't implemented yet, but add if needed
-                # Loop continues with new instructions/feedback
-                if "instruction" in decision:
-                    instruction = decision["instruction"]
-                else:
-                    instruction = f"Tool outputs received:\n{json.dumps(tool_outputs)}\nProceed."
-
-            except Exception as e:
-                # Fallback if check prompt fails or doesn't exist
-                # Just feed the tool outputs back into the main loop
-                instruction = f"Tool outputs: {json.dumps(tool_outputs)}"
-
-        return response
-
-    def extract_code_block(self, text):
-        """
-        Match block of code, assuming llm returns as markdown or code block.
-        """
-        match = re.search(r"```(?:\w+)?\s*\n(.*?)\n\s*```", text, re.DOTALL)
-        if match:
-            return match.group(1).strip()
-
-    def record_step(self, tool, args, output):
-        self.metadata["steps"].append(
-            {
-                "tool": tool,
-                "args": args,
-                "output_snippet": str(output)[:200],
-                "timestamp": time.time(),
-            }
-        )
-
-    def record_usage(self, duration):
-        """
-        Record token usage for the LLM.
-
-        TODO: need to look into metrics for other backends.
-        """
-        if hasattr(self.backend, "token_usage"):
-            self.metadata["llm_usage"].append(self.backend.token_usage)
-        # TODO: vsoch what to do with duration?
-
-
-# STOPPED HERE - debug this.
-# Can we use flux somehow to submit / then subscribe?
-# Why can't we give the llm total control (a firecracker vm or server)?
-# How do we build an orchestration state machine tool into flux based on dependncies? mcp?
+        return result

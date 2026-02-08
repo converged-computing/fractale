@@ -1,32 +1,109 @@
 import json
+import re
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional
+
+from fractale.logger.logger import logger
 
 
 @dataclass
-class ToolResult:
+class StepResult:
     """
     Standardized client-side view of a tool execution.
     """
 
-    content: str  # The human-readable string (for UI and LLM context)
-    data: Optional[Dict]  # The structured data (if JSON was returned)
-    is_error: bool  # Success/Fail flag
-    error_message: Optional[str] = None
+    content: str
+    data: Optional[Dict] = None
+    metrics: Optional[Dict] = None
+    transition: Optional[str] = None
+
+    def dict(self):
+        """
+        Dump to dictionary for saving.
+        """
+        result = {"has_error": self.has_error}
+        if self.metrics:
+            result["metrics"] = self.metrics
+        if self.data:
+            result["data"] = self.data
+        elif self.content:
+            result["content"] = self.content
+        return result
+
+    def show(self):
+        """
+        Show the result!
+        """
+        if self.data is not None:
+            result = json.dumps(self.data)
+        else:
+            result = self.content
+        logger.panel(result, title="Agent Result", color="blue", truncate=800)
+
+    def retry_prompt(self, extra):
+        """
+        Get a retry prompt with the error.
+        """
+        prompt = "Your last attempt was not successful"
+        if self.error:
+            prompt += f":\n{self.error}"
+        prompt += "\nPlease try again."
+        if extra:
+            prompt += "\n" + extra
+        return prompt
+
+    def add_error(self, error):
+        """
+        Add an error to the result.
+        """
+        self.data = self.data or {}
+        if "errors" not in self.data:
+            self.data["errors"] = []
+        if isinstance(self.data["errors"], list):
+            self.data["errors"].append(error)
+        elif isinstance(self.data["errors"], str):
+            self.data["errors"] += f"\n{error}"
+
+    @property
+    def has_error(self):
+        data = self.data or {}
+
+        # 1. We set has error if we find a parseable return code (my preference)
+        if self.error:
+            return True
+
+        for term in ["return_code", "retval", "returncode", "return_value"]:
+            if term in data and data[term] != 0:
+                return True
+        return False
+
+    @property
+    def error(self):
+        """
+        Attempt to get errors from function calls that return them!
+
+        1. We need to check data first, because we can have an empty error/errors return.
+        2. We only look for errors in content we can't parse (likely text response.)
+        """
+        data = self.data or {}
+        if "error" in data and data["error"]:
+            return data["error"]
+
+        elif "errors" in data:
+            # Return empty response here to indicate absence of errors
+            if not data["errors"]:
+                return
+            return "\n".join(data["errors"])
+
+        # Fall back to content if error is there
+        if not data and self.content and re.search(self.content.lower(), "(error|fail|abort)"):
+            return self.content
 
 
-def parse_tool_response(raw_response: Any) -> ToolResult:
+def parse_response(raw_response: Any, metrics: dict = None):
     """
     Parses the raw return value from fastmcp.Client.call_tool into a robust ToolResult.
-    Handles:
-    1. FastMCP Protocol objects (CallToolResult)
-    2. JSON Strings
-    3. Python Dictionaries
-    4. Plain Text
     """
-    content = ""
-
-    # 1. Unwrap FastMCP Protocol Object
     # FastMCP returns an object with a 'content' list of TextContent items
     if hasattr(raw_response, "content") and isinstance(raw_response.content, list):
         # Join multiple content blocks if present
@@ -35,37 +112,10 @@ def parse_tool_response(raw_response: Any) -> ToolResult:
         # Fallback for raw strings or other types
         content = str(raw_response)
 
-    # 2. Attempt JSON Parsing (to get structured data)
+    # Attempt JSON Parsing (to get structured data)
     data = None
     try:
         data = json.loads(content)
     except (json.JSONDecodeError, TypeError):
         pass
-
-    # 3. Determine Error Status
-    is_error = False
-    error_msg = None
-
-    # Strategy A: Structured Checks (Priority)
-    if isinstance(data, dict):
-        # Check standard conventions for exit codes or status keys
-        if data.get("returncode", 0) != 0:
-            is_error = True
-        elif data.get("exit_code", 0) != 0:
-            is_error = True
-        elif data.get("status", "").lower() in ["error", "failure", "failed"]:
-            is_error = True
-        elif data.get("is_error"):
-            is_error = True
-
-    # Strategy B: String Heuristics (Fallback)
-    # If no structured signal found, look for visual markers in the text
-    if not is_error:
-        # Matches the Result.render() format we defined earlier
-        if "❌" in content or "STATUS: FAILURE" in content or "CRITICAL ERROR" in content:
-            is_error = True
-
-    if is_error:
-        error_msg = content  # Use the full content as the error description
-
-    return ToolResult(content=content, data=data, is_error=is_error, error_message=error_msg)
+    return StepResult(content=content, data=data, metrics=metrics)

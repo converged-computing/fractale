@@ -1,3 +1,4 @@
+import asyncio
 import os
 from typing import Any, Dict, List, Tuple
 
@@ -9,7 +10,12 @@ default_model = "gemini-2.5-pro"
 
 
 class GeminiBackend(LLMBackend):
-    def __init__(self, config: ModelConfig):
+    def __init__(self, config: ModelConfig = None, tools=None):
+        """
+        export GEMINI_API_KEY=xxxx
+        from fractale.engines.native.backends.gemini import GeminiBackend
+        backend = GeminiBackend()
+        """
         super().__init__()
         from google import genai
         from google.genai import types
@@ -17,170 +23,151 @@ class GeminiBackend(LLMBackend):
         self.genai = genai
         self.types = types
 
-        self.api_key = config.api_key or os.getenv("GEMINI_API_KEY")
+        self.api_key = getattr(config, "api_key", None) or os.getenv("GEMINI_API_KEY")
         if not self.api_key:
             raise ValueError("GEMINI_API_KEY environment variable not set.")
 
-        self.model_name = config.model_name or default_model
-        self.chat = None
-        self.client = None
-        self.tools_config = None
-        self._usage = {}
-
-    async def initialize(self, mcp_tools: List[Any]):
-        """
-        Initialize the client and chat session with tools using the new SDK.
-        """
+        self.model_name = getattr(config, "model_name", None) or default_model
         self.client = self.genai.Client(api_key=self.api_key)
 
-        # Convert MCP tools to Gemini types...
-        function_declarations = []
+        # Allow custom set of tools to be set on init
+        self.tools = tools
+        if not self.tools:
+            self.tools = asyncio.run(self.list_tools())
 
-        for tool in mcp_tools:
-            if "-" in tool.name or " " in tool.name:
-                raise ValueError(
-                    f"❌ Invalid Tool Name: '{tool.name}'\n"
-                    f"Gemini API does not allow hyphens or spaces in function names.\n"
-                    f"Please rename this tool in your MCP Server (e.g. use '{tool.name.replace('-', '_')}')."
-                )
+    async def list_tools(self):
+        async with self.mcp_client:
+            return await self.mcp_client.list_tools()
 
-            # Deep copy and clean schema
-            schema = tool.inputSchema.copy()
-            self._clean_schema(schema)
+    # Configs with different levels of tool allowances
+    @property
+    def all_tools_config(self):
+        return self.types.GenerateContentConfig(tools=self.tools)
 
-            # Gemini needs specific types, probably for protobuf
-            func_decl = self.types.FunctionDeclaration(
-                name=tool.name, description=tool.description, parameters=schema
-            )
-            function_declarations.append(func_decl)
-
-        # Again, a "Tool" container
-        if function_declarations:
-            self.tools_obj = [self.types.Tool(function_declarations=function_declarations)]
-        else:
-            self.tools_obj = None
-
-        # In the new SDK, we create the chat via the client
-        # We pass the tools configuration here so the chat session knows about them
-        self.chat = self.client.chats.create(
-            model=self.model_name, config=self.types.GenerateContentConfig(tools=self.tools_obj)
+    @property
+    def no_tools_config(self):
+        tool_config = self.types.ToolConfig(
+            function_calling_config=self.types.FunctionCallingConfig(mode="NONE")
         )
+        return self.types.GenerateContentConfig(tools=[], tool_config=tool_config)
 
-    def _clean_schema(self, obj):
-        """
-        Recursive helper to fix types / remove defaults for Gemini Schema.
-        """
-        if isinstance(obj, dict):
-            if "default" in obj:
-                del obj["default"]
+    @property
+    def some_tools_config(self, tools):
+        tool_config = self.types.ToolConfig(
+            function_calling_config=self.types.FunctionCallingConfig(
+                mode="ANY", allowed_function_names=tools
+            )
+        )
+        return self.types.GenerateContentConfig(tools=[tools], tool_config=tool_config)
 
-            # Gemini prefers uppercase types (STRING, OBJECT, etc)
-            if "type" in obj and isinstance(obj["type"], str):
-                obj["type"] = obj["type"].upper()
-            for k, v in list(obj.items()):
-                self._clean_schema(v)
-        elif isinstance(obj, list):
-            for item in obj:
-                self._clean_schema(item)
+    @property
+    def chat_all_tools(self):
+        """
+        Use chat for some semblance of memory
+        """
+        if self._chat_all_tools is not None:
+            return self._chat_all_tools
+        self._chat_all_tools = self.client.chats.create(
+            model=self.model_name, config=self.all_tools_config
+        )
+        return self._chat_all_tools
+
+    @property
+    def chat_no_tools(self):
+        """
+        Use chat for some semblance of memory, but no tools
+        """
+        if self._chat_no_tools is not None:
+            return self._chat_no_tools
+        self._chat_no_tools = self.client.chats.create(
+            model=self.model_name, config=self.no_tools_config
+        )
+        return self._chat_no_tools
+
+    def chat_some_tools(self, tools):
+        """
+        Use chat for some semblance of memory WITH specific tools
+
+        Once this is created, the tools are set.
+        """
+        if self._chat_with_tools is not None:
+            return self._chat_with_tools
+        self._chat_with_tools = self.client.chats.create(
+            model=self.model_name, config=self.some_tools_config(tools)
+        )
+        return self._chat_with_tools
+
+    def generate_tool_calls(self, candidates):
+        """
+        Generate tool calling to return to calling agent.
+        """
+        tool_calls = []
+        for candidate in candidates:
+            text_content = ""
+            tool_calls = []
+            for part in candidate.content.parts:
+                if part.text:
+                    text_content += part.text
+
+                if part.function_call:
+                    tool_calls.append(
+                        {"name": part.function_call.name, "args": part.function_call.args}
+                    )
+
+        return tool_calls
 
     def generate_response(
         self,
         prompt: str = None,
-        tool_outputs: List[Dict] = None,
         use_tools: bool = True,
-        one_off: bool = False,
+        memory: bool = False,
         tools: List[str] = None,
     ) -> Tuple[str, Any, List[Dict]]:
         """
         Generate response from Gemini using the new SDK patterns.
         """
-        # Function calling config
-        fc_config = None
-
-        if not use_tools or not self.tools_obj:
-            fc_config = self.types.FunctionCallingConfig(mode="NONE")
-        elif tools:
-            # Force specific tools (ANY) with allowed_function_names
-            sanitized_names = [t.replace("-", "_") for t in tools if t]
-            fc_config = self.types.FunctionCallingConfig(
-                mode="ANY", allowed_function_names=sanitized_names
+        # One-off (no memory) call with any tools
+        if not memory and use_tools and not tools:
+            response = self.client.models.generate_content(
+                model=self.model_name, contents=prompt, config=self.all_tools_config
             )
-        else:
-            fc_config = self.types.FunctionCallingConfig(mode="AUTO")
 
-        # function_calling_config must be wrapped in ToolConfig
-        tool_config_obj = self.types.ToolConfig(function_calling_config=fc_config)
+        # One-off, no tools
+        elif not memory and not use_tools:
+            response = self.client.models.generate_content(
+                model=self.model_name, contents=prompt, config=self.no_tools_config
+            )
 
-        config = self.types.GenerateContentConfig(
-            tools=self.tools_obj if use_tools else None,
-            tool_config=tool_config_obj,
-            temperature=0.0,
-        )
+        # One off, specific tools
+        elif not memory and use_tools and tools is not None:
+            response = self.client.models.generate_content(
+                model=self.model_name, contents=prompt, config=self.some_tools_config(tools)
+            )
 
-        response = None
+        # We want to use specific tools with memory
+        elif use_tools and tools and memory:
+            response = self.chat_with_tools(tools).send_message(prompt)
 
-        try:
-            # One-off (stateless)
-            if one_off:
-                if not prompt:
-                    return "", None, []
-                response = self.client.models.generate_content(
-                    model=self.model_name, contents=prompt, config=config
-                )
+        # We don't want tools, but we want a "memory" chat
+        elif not use_tools and memory:
+            response = self.chat_no_tools.send_message(prompt)
 
-            # Chat (memory)
-            else:
-                # If we have tool outputs, we are completing a turn
-                if tool_outputs:
-                    parts = []
-                    for output in tool_outputs:
-                        parts.append(
-                            self.types.Part.from_function_response(
-                                name=output["name"].replace("-", "_"),
-                                response={"result": output["content"]},
-                            )
-                        )
-                    # Send the tool outputs back to the chat
-                    response = self.chat.send_message(parts)
+        # We want all tools with a memory chat
+        elif memory:
+            response = self.chat_all_tools.send_message(prompt)
 
-                # Otherwise, it's a new user prompt
-                elif prompt:
-                    # Update the chat's config for this specific turn
-                    response = self.chat.send_message(prompt, config=config)
-
-        except Exception as e:
-            return f"Error communicating with Gemini: {str(e)}", None, []
-
-        if not response:
-            return "", None, []
-
-        # Usage...
-        if response.usage_metadata:
-            self._usage = {
-                "prompt_tokens": response.usage_metadata.prompt_token_count,
-                "completion_tokens": response.usage_metadata.candidates_token_count,
-            }
-
-        if not response.candidates:
+        # Did we get tool calls?
+        calls = []
+        if response.candidates:
+            calls = self.generate_tool_calls(response.candidates)
+        elif use_tools and not response.candidates:
             return "Error: Blocked by safety filters or empty response", None, []
 
-        # And content.
-        candidate = response.candidates[0]
-        text_content = ""
-        tool_calls = []
+        usage = {}
+        if response.usage_metadata:
+            usage = {}
+            for k, v in response.usage_metadata.model_dump().items():
+                if v is not None and isinstance(v, int):
+                    usage[k] = v
 
-        for part in candidate.content.parts:
-            if part.text:
-                text_content += part.text
-
-            if part.function_call:
-                tool_calls.append(
-                    {"name": part.function_call.name, "args": part.function_call.args}
-                )
-
-        reasoning_content = None
-        return text_content, reasoning_content, tool_calls
-
-    @property
-    def token_usage(self):
-        return self._usage
+        return response.text, usage, calls

@@ -10,10 +10,12 @@ class ModelConfig:
     base_url: str = None
 
     @classmethod
-    def from_context(cls, context: dict):
+    def from_context(cls, context: dict = None):
         """
         Extracts config from the Blackboard Context (YAML Inputs).
         """
+        context = context or {}
+
         # The llm provider is the backend
         provider = context.get("backend") or os.environ.get("LLM_PROVIDER", "gemini")
         model = context.get("model") or os.environ.get("LLM_MODEL")

@@ -89,33 +89,6 @@ class Manager(AgentBase):
             self.ui.on_workflow_complete("Failed")
             raise e
 
-    async def connect_and_validate(self):
-        """
-        Connect and validate the client with the plan for both prompts and tools.
-        """
-        async with self.client:
-            prompts = await self.client.list_prompts()
-            p_list = prompts.prompts if hasattr(prompts, "prompts") else prompts
-            prompt_map = {p.name: p.dict() for p in p_list}
-
-            tools = await self.client.list_tools()
-            t_list = tools.tools if hasattr(tools, "tools") else tools
-            tool_map = {t.name: t.dict() for t in t_list}
-
-            # Validate and set schemas on plan steps
-            for step in self.plan.states.values():
-                if step.type == "agent":
-                    if step.prompt in prompt_map:
-                        step.set_schema(prompt_map[step.prompt])
-                    else:
-                        sys.exit(f"⚠️  Prompt '{step.prompt}' not found on server during init.")
-
-                elif step.type == "tool":
-                    if step.tool in tool_map:
-                        step.set_schema(tool_map[step.tool])
-                    else:
-                        sys.exit(f"⚠️  Tool '{step.tool}' not found on server during init.")
-
     async def get_helper_agents(self, cfg):
         """
         Initialize helper agents for a run. We assume any agents that
@@ -191,7 +164,7 @@ class Manager(AgentBase):
                     break
 
                 # Prepare a prompt and get the inputs for a tool or prompt call
-                logger.info(f"  Generating Arguments for Step Call {step.name}")
+                logger.info(f"Generating Arguments for Step Call {step.name}")
 
                 # inputs = await agents["schema"].get_validated_arguments(step, context)
                 inputs = utils.resolve_templates(

@@ -4,21 +4,17 @@ from typing import Annotated, Any, Dict
 
 # We are hosting tools here that deviate a lot from a standard validation request.
 
-PERSONA = "You are a job validation expert."
 
-CONTEXT = "We need to validate a job specification for correctness."
-
-
-def get_validation_text(script):
+def get_jobspec_validation_text(script):
     """
     Get prompt text for an initial build.
     """
     return f"""
 ### PERSONA
-{PERSONA}
+You are a job validation expert.
 
 ### CONTEXT
-{CONTEXT}
+We need to validate a job specification for correctness.
 
 ### GOAL
 I need to validate if the following job specification is correct:
@@ -45,5 +41,5 @@ def validate_jobspec_expert(script: Annotated[str, "Batch script or job specific
     """
     Get a prompt to encourage validation of a job specification.
     """
-    prompt_text = get_validation_text(script)
+    prompt_text = get_jobspec_validation_text(script)
     return {"messages": [{"role": "user", "content": {"type": "text", "text": prompt_text}}]}

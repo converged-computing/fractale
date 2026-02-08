@@ -1,6 +1,8 @@
-import json
+import os
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Tuple
+
+from fastmcp import Client
+from fastmcp.client.transports import StreamableHttpTransport
 
 
 class LLMBackend(ABC):
@@ -9,57 +11,29 @@ class LLMBackend(ABC):
     """
 
     def __init__(self):
-        self.tools_schema = []
+        self.init_mcp()
+
+        # Chat is init for cases when we want to use memory
+        self._chat_all_tools = None
+        self._chat_no_tools = None
+        self._chat_with_tools = None
+
+    def init_mcp(self):
+        """
+        Setup the mcp client for the state machine. We use
+        the streaming http transport from fastmcp.
+        """
+        port = os.environ.get("FRACTALE_MCP_PORT", "8089")
+        token = os.environ.get("FRACTALE_MCP_TOKEN")
+        url = f"http://127.0.0.1:{port}/mcp"
+
+        headers = {"Authorization": token} if token else None
+        transport = StreamableHttpTransport(url=url, headers=headers)
+        self.mcp_client = Client(transport)
 
     @abstractmethod
-    async def initialize(self, mcp_tools: List[Any]):
-        """
-        Convert MCP tools to provider-specific format and setup session.
-        """
-        pass
-
-    def ensure_json(self, response):
-        """
-        Require an LLM to return json.
-        """
-        # TODO: Add a max_retries counter here to prevent infinite recursion
-        try:
-            return json.loads(response)
-        except Exception as e:
-            prompt = f"Your response {response} was not valid json: {e}. Please return valid JSON."
-            # Call self, not self.backend
-            response, _, _ = self.generate_response(prompt=prompt)
-            return self.ensure_json(response)
-
-    def select_tools(self, use_tools=True):
-        """
-        Clean logic to decide to use a tool or not for OpenAI-compatible endpoints.
-        """
-        if not use_tools or not self.tools_schema:
-            return {"tools": None, "tool_choice": None}
-
-        # OpenAI expects auto, none, or required (or specific tool)
-        # We default to auto if tools are allowed and present.
-        return {"tools": self.tools_schema, "tool_choice": "auto"}
-
-    @abstractmethod
-    def generate_response(
-        self,
-        prompt: str = None,
-        tool_outputs: List[Dict] = None,
-        use_tools: bool = True,
-        one_off: bool = False,
-        tools: List[str] = None,
-    ):
+    def generate_response(self, *args, **kwargs):
         """
         Returns a tuple: (text_content, reasoning_content, tool_calls)
-        """
-        pass
-
-    @property
-    @abstractmethod
-    def token_usage(self) -> Dict:
-        """
-        Return token stats for metadata stuffs.
         """
         pass

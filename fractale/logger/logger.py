@@ -113,7 +113,7 @@ class Logger:
         self.debug("{}: {info.filename}, {info.function}, {info.lineno}".format(msg, info=info))
 
     def info(self, message):
-        print(f"\n[bold cyan]{message}[/bold cyan]")
+        print(f"[bold cyan]{message}[/bold cyan]")
 
     def warning(self, msg):
         self.handler(dict(level="warning", msg=msg))
@@ -154,12 +154,14 @@ class Logger:
         else:
             print(Panel(message, title=title, border_style=border_style, expand=expand))
 
-    def panel(self, message, title, color="green"):
+    def panel(self, message, title="Result", color="green", truncate=None):
         """
         Custom message / title Panel.
         """
         color = color.lower()
-        title = f"[{color}]Result Parser[/{color}]"
+        title = f"[{color}]{title}[/{color}]"
+        if isinstance(truncate, int) and len(message) >= truncate:
+            message = message[:truncate]
         return self.custom(message, title, border_style=color)
 
     def text_handler(self, msg):

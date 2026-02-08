@@ -1,5 +1,7 @@
 import logging
 
+from rich import print
+
 logger = logging.getLogger(__name__)
 
 
@@ -12,6 +14,28 @@ class Step:
     def __init__(self, spec):
         self.spec = spec
         self.schema = None
+
+    def show(self):
+        """
+        Show step metadata
+        """
+        print(f"   {self.prefix}")
+        print(f"   type: '{self.type}'")
+        if self.tool:
+            print(f"   call: '{self.tool}'")
+        else:
+            print(f"   call: '{self.prompt}'")
+
+    @property
+    def tools(self):
+        """
+        Return a list of tools
+        """
+        if self.tool is not None:
+            return [self.tool]
+        elif self.tools is not None and isinstance(self.tools, list):
+            return self.tools
+        return None
 
     def set_schema(self, schema: set):
         """
@@ -95,6 +119,10 @@ class Step:
     @property
     def tool(self):
         return self.spec.get("tool")
+
+    @property
+    def tools(self):
+        return self.spec.get("tools")
 
     @property
     def inputs(self):

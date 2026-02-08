@@ -23,13 +23,28 @@ class Context(collections.UserDict):
     """
 
     def __init__(self, *args, **kwargs):
+        # args[0] is typically the dict object
+        # Filter out those that come from the client (noise)
+        args = (self.filter_cli_args(args[0]),)
         super().__init__(*args, **kwargs)
+
+    def filter_cli_args(self, args):
+        """
+        Filter known arguments from the client
+        """
+        updated = {}
+        skips = ["debug", "quiet", "config_dir", "version", "command", "plan", "mode", "engine"]
+        for k, v in args.items():
+            if k in skips:
+                continue
+            updated[k] = v
+        return updated
 
     def reset(self):
         """
         Reset the return code and result.
         """
-        for key in ["return_code", "result", "error_message"]:
+        for key in ["return_code", "result", "error"]:
             self.data[key] = None
 
     def __getattribute__(self, name):
