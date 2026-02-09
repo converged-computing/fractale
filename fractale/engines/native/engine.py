@@ -5,6 +5,7 @@ from datetime import datetime
 
 import fractale.utils as utils
 from fractale.core.context import get_context
+from fractale.engines.native.agent import HelperAgent
 from fractale.engines.native.result import parse_response
 from fractale.logger import logger
 from fractale.tools.calls import check_tool_call
@@ -21,22 +22,16 @@ class Manager(AgentBase):
     Standalone class (No inheritance from Agent).
     """
 
-    def __init__(
-        self, plan, ui=None, results_dir=None, max_attempts=10, backend="gemini", database=None
-    ):
+    def __init__(self, plan, ui=None, max_attempts=10, backend="gemini", database=None):
         self.plan = plan
         self.ui = ui or CLIAdapter()
-
-        # TODO: this is not exposed
-        self.results_dir = results_dir or os.getcwd()
         self.max_attempts = max_attempts
         self.backend = backend
         self.attempts = 0
         self.database = database
         self.metadata = {"status": "Pending"}
         self.init()
-        # helper agent for various tasks
-        self.init_helper()
+        self.agent = HelperAgent(name="state-machine-helper", ui=self.ui)
 
     def run(self, context):
         """
@@ -65,13 +60,17 @@ class Manager(AgentBase):
 
         logger.info(f"✅ State Machine Initialized: {len(self.plan.states)} states.")
         self.metadata["status"] = "running"
+        max_loops = context.get("max_attempts") or self.max_attempts or 5
 
         # Start Execution Loop
         tracker = []
+        loops = 1
         try:
-            while True:
+            while loops < max_loops:
+                self.ui.log(f"🧠 Loop {loops}/{max_loops}")
                 result = sm.run_cycle()
                 tracker.append(result)
+                logger.info(f"🌀 State Machine Update: {result['transition']}.")
 
                 # Are we done? We need to break from True
                 self.metadata["status"] = result["state"]
@@ -79,15 +78,12 @@ class Manager(AgentBase):
                     self.ui.log_workflow_complete(result["state"])
                     break
 
-                # Ask user what to do next
-                if result["state"] == "ask":
-                    action = sm.ask_next_step(result)
-
-                    # Implied action retry is a continue
-                    if action == "quit":
-                        break
+                loops += 1
+                # TODO Ask user what to do next
+                # This doesn't work in async
 
             # Save and return
+            self.metadata['attempts'] = loops
             self.save_results(tracker)
             return tracker
 
@@ -95,11 +91,6 @@ class Manager(AgentBase):
             self.metadata["status"] = "Failed"
             logger.error(f"Orchestration failed: {e}")
             raise e
-
-    def init_helper(self):
-        self.agent = WorkerAgent(name="state-machine-helper", ui=self.ui)
-        self.agent.init()
-        self.agent.init_backend()
 
     def run_agent(self, step, context):
         """
@@ -121,28 +112,30 @@ class Manager(AgentBase):
         """
         Runs a deterministic Tool directly (no LLM).
         """
-        logger.info(step.name)
-        tool_name = step.tool
         start_time = datetime.now()
         tool_args = utils.resolve_templates(
             inputs=step.spec.get("inputs", {}), context=context, schema=step.arguments
         )
-        logger.info(f"🛠️  Executing Tool: {tool_name}")
 
         async def call():
             async with self.client:
-                return await self.client.call_tool(tool_name, tool_args)
+                return await self.client.call_tool(step.tool, tool_args)
 
         raw_result = utils.run_sync(call())
         duration = (datetime.now() - start_time).total_seconds()
-        metrics = {"duration": duration, "tool": tool_name}
+        metrics = {"duration": duration, "tool": step.name}
         result = parse_response(raw_result, metrics)
         result.show()
 
-        # Ask an agent what the outcome is
-        decision = {}
-        while "result" not in decision:
-            decision = self.check_tool_call(tool_name, result, decision)
+        # Case 1: We have explicit rules to update the step transition, and match
+        transition = step.match_rules(result.data or result.content)
+        if transition:
+            result.transition = transition
+        # Case 2: Ask an agent what the outcome is
+        else:
+            decision = {}
+            while "result" not in decision:
+                decision = self.check_tool_call(step.name, result, decision)
         return result
 
     def check_tool_call(self, tool_name, result, decision):
@@ -151,11 +144,9 @@ class Manager(AgentBase):
         """
         check = check_tool_call(tool_name, result.content)
         logger.panel(check, "Tool Check Request")
-        decision, _, _ = self.agent.backend.generate_response(
-            prompt=check, use_tools=False, memory=True
-        )
+        response = self.agent.ask(prompt=check, use_tools=False, memory=True)
         try:
-            decision = json.loads(utils.get_code_block(decision))
+            decision = json.loads(utils.get_code_block(response.content))
         except:
             return {}
 

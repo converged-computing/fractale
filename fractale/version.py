@@ -20,6 +20,9 @@ INSTALL_REQUIRES = (
     ("fastapi", {"min_version": None}),
     # Yeah, probably overkill, just being used for printing the scripts
     ("rich", {"min_version": None}),
+    # Rule and logic expression matching
+    ("boolia", {"min_version": None}),
+    # We can likely eliminate these.
     ("textual", {"min_version": None}),
     ("nest_asyncio", {"min_version": None}),
 )

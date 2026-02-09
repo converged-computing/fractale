@@ -16,6 +16,7 @@ class StepResult:
     data: Optional[Dict] = None
     metrics: Optional[Dict] = None
     transition: Optional[str] = None
+    attempts: Optional[int] = None
 
     def dict(self):
         """
@@ -28,6 +29,8 @@ class StepResult:
             result["data"] = self.data
         elif self.content:
             result["content"] = self.content
+        if self.attempts is not None:
+            result['attempts'] = self.attempts        
         return result
 
     def show(self):
@@ -99,12 +102,12 @@ class StepResult:
         if not data and self.content and re.search(self.content.lower(), "(error|fail|abort)"):
             return self.content
 
-
 def parse_response(raw_response: Any, metrics: dict = None):
     """
     Parses the raw return value from fastmcp.Client.call_tool into a robust ToolResult.
     """
     # FastMCP returns an object with a 'content' list of TextContent items
+    # The second also handles a ToolCall result
     if hasattr(raw_response, "content") and isinstance(raw_response.content, list):
         # Join multiple content blocks if present
         content = "\n".join([c.text for c in raw_response.content if hasattr(c, "text")])

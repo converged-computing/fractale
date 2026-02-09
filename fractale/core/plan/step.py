@@ -1,5 +1,6 @@
 import logging
 
+from boolia import evaluate
 from rich import print
 
 logger = logging.getLogger(__name__)
@@ -119,6 +120,20 @@ class Step:
     @property
     def tool(self):
         return self.spec.get("tool")
+
+    def match_rules(self, result):
+        """
+        Given output from an agent, check against rules.
+        https://github.com/joaofreires/boolia
+
+        Result should be a dict (first preference) or string an LLM response
+        We return the first transition state that matches a rule.
+        """
+        for transition, rules in (self.spec.get("rules") or {}).items():
+            for rule in rules:
+                if evaluate(rule, context=result):
+                    print(f"Matched Rule '{rule}' for transition '{transition}'")
+                    return transition
 
     @property
     def tools(self):

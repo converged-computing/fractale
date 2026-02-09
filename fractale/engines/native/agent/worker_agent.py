@@ -4,14 +4,14 @@ import time
 
 from rich import print
 
-# Native Engine Imports
 import fractale.engines.native.backends as backends
 import fractale.engines.native.result as results
 import fractale.utils as utils
-from fractale.core.config import ModelConfig
-from fractale.engines.base import AgentBase
 from fractale.logger.logger import logger
-from fractale.tools.calls import check_call
+from fractale.tools.calls import check_call_results
+
+from .base_agent import AgentBase
+from .helper_agent import DebugAgent
 
 
 class WorkerAgent(AgentBase):
@@ -25,7 +25,7 @@ class WorkerAgent(AgentBase):
         self.name = name
 
         # The agent is responsible for a step.
-        # this is basically a config for the step
+        # this is basically a config for the workflow step
         self.step = step
         self.ui = ui
         self.max_attempts = max_attempts or 5
@@ -36,6 +36,8 @@ class WorkerAgent(AgentBase):
             "times": {},
             "steps": [],
         }
+        # Debug Agent
+        self.debug_agent = DebugAgent()
 
     def run(self, context):
         """
@@ -77,7 +79,7 @@ class WorkerAgent(AgentBase):
             instruction = await self.fetch_persona(prompt, inputs)
 
             # Since we are moving between steps, add the context
-            # instruction += self.add_context(instruction, remainder)
+            instruction += self.add_context(instruction, context, self.step.arguments)
 
             # Once we get here, we have a specific instruction (with a persona)
             # And we want to allow the agent to work on the task in a loop
@@ -85,32 +87,26 @@ class WorkerAgent(AgentBase):
 
         return response
 
-    def add_context(self, instruction, context):
+    def add_context(self, instruction, context, arguments=None):
         """
         Appends the Blackboard variables to the system prompt so the LLM knows the state of the world.
         """
+        arguments = arguments or {}
         if not context:
             return instruction
 
         info = "\n\n### SHARED CONTEXT\n"
-        info += "The following variables are available from inputs and previous steps:\n\n"
+        info += "The following variables are available from previous steps:\n\n"
 
         for k, v in context.items():
+            if k in arguments:
+                continue
             if isinstance(v, (dict, list)):
                 val_str = json.dumps(v, indent=2)
             else:
                 val_str = str(v)
             info += f"- **{k}**: {val_str}\n"
         return instruction + info
-
-    def init_backend(self, context=None):
-        """
-        Create the backend from the model config.
-        """
-        cfg = ModelConfig.from_context(context)
-        if cfg.provider not in backends.BACKENDS:
-            raise ValueError(f"Provider '{cfg.provider}' not supported.")
-        self.backend = backends.BACKENDS[cfg.provider](config=cfg)
 
     async def fetch_persona(self, prompt, arguments):
         """
@@ -122,13 +118,12 @@ class WorkerAgent(AgentBase):
 
         try:
             result = await self.client.get_prompt(name=prompt, arguments=arguments)
-            msgs = [
-                m.content.text if hasattr(m.content, "text") else str(m.content)
-                for m in result.messages
-            ]
+            msgs = []
+            for msg in result.messages:
+                # Assume a prompt server returns a single prompt message
+                msgs.append(json.loads(msg.content.text)["messages"][0]["content"]["text"].strip())
 
-            # Get generated prompt and add custom user instruction
-            return "\n\n".join(msgs) + (self.step.spec.get("instruction") or "")
+            return "".join(msgs) + (self.step.spec.get("instruction") or "")
         except Exception as e:
             raise RuntimeError(f"Failed to fetch persona '{prompt}': {e}")
 
@@ -142,7 +137,11 @@ class WorkerAgent(AgentBase):
         logger.panel(instruction, title="Agent Instruction")
 
     def get_instruction(self, instruction):
-        return json.loads(instruction)["messages"][0]["content"]["text"].strip()
+        # Assume prmopt message, but fall back to text
+        try:
+            return json.loads(instruction)["messages"][0]["content"]["text"].strip()
+        except:
+            return instruction
 
     async def process_loop(self, instruction, context):
         """
@@ -153,17 +152,13 @@ class WorkerAgent(AgentBase):
         result = None
 
         # Are we allowed to use tools?
-        use_tools = self.step.allow_tools
+        has_tools = self.step.tool or self.step.tools
+        use_tools = self.step.allow_tools or has_tools
 
-        # If tool is set, we might force the model to one tool.
-        # Obviously the use_tools needs to be true here.
-        if self.step.tool is not None:
-            use_tools = True
-
+        # Each step internally can go up to some max tries
         while loops < max_loops:
             # Start counting at 1. Like Matlab
             loops += 1
-            self.ui.log(f"🧠 Loop {loops}/{max_loops} [tools: {use_tools}]")
             self.show_instruction(instruction)
 
             # This is making an agentic call, with or without tools
@@ -175,21 +170,23 @@ class WorkerAgent(AgentBase):
                 memory=True,
             )
 
-            # Quick return if no tools
+            # Quick return if no tool callss
             if not calls:
-                output = utils.get_code_block(response)
-                return results.parse_response(output, metrics)
+                result = results.parse_response(utils.get_code_block(response), metrics)
 
-            # Process all calls (Parallel tool use support)
-            # TODO: we should set the error and result on the context, and
-            # tell the memory agent that
+                # But if we have calls, better determine the state
+                transition = self.step.match_rules(result.data or result.content)
+                if transition:
+                    result.transition = transition
+                if result is not None:
+                    result.attempts = loops
+                return result
+
+            # Process all calls requested by LLM
             tool_results = []
             for call in calls:
-                t_name = call["name"]
-                t_args = call["args"]
-                self.ui.log(f"🛠️  Calling: {t_name} with args {t_args}")
-
-                result = await self.client.call_tool(t_name, t_args)
+                self.ui.log(f"🛠️  Calling: {call['name']} with args {call['args']}")
+                result = await self.client.call_tool(call["name"], call["args"])
                 result = results.parse_response(result, metrics)
                 call["result"] = result.content
 
@@ -197,43 +194,21 @@ class WorkerAgent(AgentBase):
                 tool_results.append(call)
 
             if tool_results:
-                check = check_call(tool_results)
-                instruction = (
-                    '{"messages":[{"role":"user","content":{"type":"text","text": "%s"}}]}' % check
-                )
+                instruction = check_call_results(tool_results)
 
-            # No error?
+            # No error? We assume this is criteria for finishing the step
             elif not result.error:
-                print(f"{self.tep.prefix} There was no error.")
+                print(f"{self.step.prefix} There was no error.")
                 break
 
             # If there is an error, we update the instruction to show it, or run out of loops and exit
             print(f"{self.step.prefix} There WAS an error.")
-            # TODO: we need an analyzer debug agent to look at the possible error.
-            instruction = (
-                '{"messages":[{"role":"user","content":{"type":"text","text": "%s"}}]}'
-                % result.error
-            )
 
-            # TODO need to work on this part - it does not work correctly yet. Instead we are not allowing tools for now
+            # Use the debug agent to generate a response to give back
+            response = self.debug_agent.ask(result.error)
+            logger.panel(response.content, title="Debug Agent Response", color="blue")
+            instruction = response.content
 
-            # If this is the first time we've used the model, add the original instruction.
-            # After this chat is created, the instruction should endure in memory
-            # first_check = self.backend._chat_no_tools is None
-            # if first_check:
-            #    check += f"\nHere is the original prompt:\n{self.get_instruction(instruction)}"
-            # logger.panel(check, "Agent Check Request")
-
-            # Get the decision to parse. This will be a new chat
-            # decision, _, _ = self.backend.generate_response(
-            #    prompt=check,
-            #    use_tools=False,
-            #    memory=True
-            # )
-            # decision = json.loads(utils.get_code_block(decision))
-            # if decision['decision'] == "retry":
-            #    instruction = f"That response was invalid. Here are the issues:\n{result.error}"
-            #    instruction = '{"messages":[{"role":"user","content":{"type":"text","text": instruction}}]}'
-            #    break
-
+        if result is not None:
+            result.attempts = loops
         return result

@@ -1,7 +1,3 @@
-PERSONA = "You are a job specification generation expert."
-CONTEXT = "We need to convert between workload manager job specification formats."
-
-
 def get_transform_text(
     script, to_manager, from_manager, fmt: str = "batch", error: str = None, previous: str = None
 ):
@@ -15,14 +11,14 @@ The desired output format is a '{fmt}' script."""
         goal = f"""You previously attempted to convert a job specification and it did not validate. Analyze the error and fix it:
 Error: {error}"""
         if previous is not None:
-            goal += f"Attempt: \n{previous}"
+            goal += f"Previous Attempt: \n{previous}"
 
     return f"""
 ### PERSONA
-{PERSONA}
+You are a job specification generation expert.
 
 ### CONTEXT
-{CONTEXT}
+We need to convert between workload manager job specification formats.
 
 ### GOAL
 {goal}

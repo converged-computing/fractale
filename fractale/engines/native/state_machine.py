@@ -80,7 +80,8 @@ class WorkflowStateMachine:
         # Determine the next state
         # Case 1: we have no next state, but failed (ask the user)
         if outcome == "failure" and not next_state:
-            transition = "ask"
+            logger.warning(f"Outcome is {outcome} and no next state defined.")
+            transition = "retry"
 
         # Case 2: Proceed or complete
         else:
