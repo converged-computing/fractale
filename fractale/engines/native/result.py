@@ -30,7 +30,7 @@ class StepResult:
         elif self.content:
             result["content"] = self.content
         if self.attempts is not None:
-            result['attempts'] = self.attempts        
+            result["attempts"] = self.attempts
         return result
 
     def show(self):
@@ -101,6 +101,7 @@ class StepResult:
         # Fall back to content if error is there
         if not data and self.content and re.search(self.content.lower(), "(error|fail|abort)"):
             return self.content
+
 
 def parse_response(raw_response: Any, metrics: dict = None):
     """

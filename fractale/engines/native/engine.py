@@ -60,14 +60,19 @@ class Manager(AgentBase):
 
         logger.info(f"✅ State Machine Initialized: {len(self.plan.states)} states.")
         self.metadata["status"] = "running"
+
+        # In this context, a loop is a retry, meaning we return to initial state
         max_loops = context.get("max_attempts") or self.max_attempts or 5
 
         # Start Execution Loop
         tracker = []
         loops = 1
+
+        # Log the initial loop
+        self.ui.log(f"🧠 Loop {loops}/{max_loops}")
+
         try:
             while loops < max_loops:
-                self.ui.log(f"🧠 Loop {loops}/{max_loops}")
                 result = sm.run_cycle()
                 tracker.append(result)
                 logger.info(f"🌀 State Machine Update: {result['transition']}.")
@@ -78,12 +83,15 @@ class Manager(AgentBase):
                     self.ui.log_workflow_complete(result["state"])
                     break
 
-                loops += 1
+                # Only count as loop if we have returned to initial state
+                if sm.current_state_name == self.plan.initial_state:
+                    self.ui.log(f"🧠 Loop {loops}/{max_loops}")
+                    loops += 1
                 # TODO Ask user what to do next
                 # This doesn't work in async
 
             # Save and return
-            self.metadata['attempts'] = loops
+            self.metadata["attempts"] = loops
             self.save_results(tracker)
             return tracker
 
