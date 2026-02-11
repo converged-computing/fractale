@@ -1,6 +1,6 @@
 # fractale-mcp
 
-> Agentic Server to support MCP Tools and Science
+> Agentic state-machine orchestrator to support MCP Tools and Science
 
 [![PyPI version](https://badge.fury.io/py/fractale-mcp.svg)](https://badge.fury.io/py/fractale-mcp)
 
@@ -16,7 +16,7 @@ We create a robust and asynchronous server that can register and load tools of i
 The library here has the following abstractions.
 
 - **Plan** is the YAML manifest that any agent can read and deploy.
-- **Engines**: The orchestration engine (native state machine, langchain, autogen) that instantiates agents.
+- **Engine**: The orchestration engine (native state machine) that instantiates agents.
 
 ### Environment
 
@@ -33,7 +33,7 @@ The following variables can be set in the environment.
 ### Agents
 
 The `fractale agent` command provides means to run build, job generation, and deployment agents.
-In our [first version](https://github.com/compspec/fractale), an agent corresponded to a kind of task (e.g., build). For this refactored version, the concept of an agent is represented in a prompt or persona, which can be deployed by a generic MCP agent with some model backend (e.g., Gemini, Llama, or OpenAI). For the framework, we were prototyping a state machine (native) approach, LangChain and AutoGen, and are choosing to start with just AutoGen. It isn't adding much aside from calling the tools, which is OK for now. The others will be returned to.
+In our [first version](https://github.com/compspec/fractale), an agent corresponded to a kind of task (e.g., build). For this refactored version, the concept of an agent is represented in a prompt or persona, which can be deployed by a generic MCP agent with some model backend (e.g., Gemini, Llama, or OpenAI). For the framework, we were prototyping a state machine (native) approach. I started testing LangChain and AutoGen but found the churn and lack of transparency annoying.
 
 ## Usage
 
@@ -44,6 +44,37 @@ Let's install [mcp-server](https://github.com/converged-computing/mcp-server) to
 ```bash
 pip install --break-system-packages git+https://github.com/converged-computing/mcp-server.git#egg=mcp-serve
 ```
+
+#### Flux JobSpec Translation
+
+To prototype with Flux, open the code in the devcontainer. Install the library and start a flux instance.
+
+```bash
+pip install -e .[all] --break-system-packages
+pip install flux-mcp IPython --break-system-packages
+flux start
+```
+
+We will need to start the server and add the validation functions and prompt. Start the server with the functions and prompt we need:
+
+```bash
+mcpserver start --config ./examples/servers/flux-gemini.yaml
+```
+
+**State Machine**
+
+Note that this needs to be run in an environment with Flux. I run both in the DevContainer. In a different terminal, export the same `FLUX_URI` from where your server is running. Ensure your credentials are exported.
+
+```bash
+export GEMINI_API_TOKEN=xxxxxxxxxx
+```
+
+And then:
+
+```bash
+fractale agent ./examples/plans/transform-retry.yaml
+```
+
 
 ### Docker Build
 
@@ -66,50 +97,20 @@ Start the server with the functions and prompt we need:
 mcpserver start --config ./examples/servers/docker-build.yaml
 ```
 
-And then run the plan. Note that we are currently focusing on AutoGen.
-
-**AutoGen**
+**State Machine**
 
 ```bash
 # In the other, run the plan
-fractale agent --engine autogen ./examples/plans/build-lammps.yaml
+fractale agent ./examples/plans/build-lammps.yaml
 ```
 
-To use the state machine, remove the `--engine` flag. Add `langchain` for LangChain.
-This works very well in Google Cloud (Gemini). I am not confident our on-premises models will easily choose the right tool. Hence the next design. If you define a `tool` section in any step, that will limit the selection of the LLM to JUST the tool you are interested in. We hope that this will work.
-
+This works very well in Google Cloud (Gemini). I am not confident our on-premises models will easily choose the right tool. Hence the next design.
 The design is simple in that each agent is responding to state of error vs. success. In the [first version](https://github.com/compspec/fractale) of our library, agents formed a custom graph. In this variant, we refactor to use MCP server tools. It has the same top level design with a manager, but each step agent is like a small state machine governed by an LLM with access to MCP tools and resources.
-
-#### Flux JobSpec Translation
-
-To prototype with Flux, open the code in the devcontainer. Install the library and start a flux instance.
-
-```bash
-pip install -e .[all] --break-system-packages
-pip install flux-mcp IPython mcp-serve --break-system-packages
-flux start
-```
-
-We will need to start the server and add the validation functions and prompt. Start the server with the functions and prompt we need:
-
-```bash
-mcpserver start --config ./examples/servers/flux-gemini.yaml
-```
-
-**AutoGen**
-
-Note that this needs to be run in an environment with Flux. I run both in the DevContainer.
-
-```bash
-fractale agent --engine autogen ./examples/plans/transform-retry.yaml
-```
 
 ### Design Choices
 
 Here are a few design choices (subject to change, of course). I am starting with re-implementing our fractale agents with this framework. For that, instead of agents being tied to specific functions (as classes on their agent functions) we will have a flexible agent class that changes function based on a chosen prompt. It will use mcp functions, prompts, and resources. In addition:
 
-- I am choosing to use autogen.AssistantAgent (older) over autogen_chatagent eqivalents (adds much more library dependency)
-- Each framework is (globally) an "engine" and this means the `Manager` class for each is under engine.py.
 - Tools hosted here are internal and needed for the library. E.g, we have a prompt that allows getting a final status for an output, in case a tool does not do a good job.
 - For those hosted here, we don't use mcp.tool (and associated functions) directly, but instead add them to the mcp manually to allow for dynamic loading.
 - We are currently focused on autogen (and the others, langchain and native, will need updates)

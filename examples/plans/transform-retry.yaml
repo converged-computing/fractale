@@ -1,0 +1,64 @@
+name: "Transform Jobspec from Flux to Slurm"
+steps:
+   # The persona generates the Dockerfile
+  - name: transform
+    type: agent
+    prompt: transform_jobspec_expert
+    allow_tools: false
+
+    # Inputs that can be passed forward to next steps
+    inputs:
+      from_manager: flux
+      to_manager: slurm
+      script: |
+        #!/bin/bash
+        #FLUX -N 1
+        #FLUX -n 64
+        #FLUX -t 100s
+        #FLUX -o cpu-affinity=per-task
+        #FLUX --queue=pbatch
+        #FLUX --setattr=container_image=ghcr.io/converged-computing/lammps-reax:ubuntu22.04
+        #FLUX --output=job.{id}.out
+        #FLUX --error=job.{id}.err
+        #FLUX --job-name=lammps
+        lmp -v x 8 -v y 8 -v z 8 -in in.reaxc.hns -nocite
+
+    # This is the simplest case. The prompt above should generate
+    # the input, and the agent SHOULD call a tool for transform.
+    # We don't have a slurm validate, but when we flip to Slurm
+    # to flux we can validate.
+    transitions:
+      failed: transform
+      success: validate
+    
+    # Fail and try again if we don't get a jobspec
+    rules:
+      failed: [not jobspec]
+
+   # The persona provides the jobspec and asks for the translation
+   # In this case we will call the transform (manual) endpoint explicitly
+  - name: validate
+    type: agent    
+    prompt: validate_jobspec_expert
+
+    # This gets jobspec from the function call output above.
+    inputs:
+      script: "{{transform_result.jobspec}}"
+
+    # If we succeed, proceed to manual validation
+    transitions:
+      failed: transform
+      success: validate_manual
+
+  - name: validate_manual
+    type: tool
+    tool: validate_flux_jobspec
+    inputs:
+      content: "{{transform_result.jobspec}}"
+
+    # If we fail, go back to transform and add error
+    # We succeed when valid in the return data structure is True
+    transitions:
+      failed: transform
+    rules:
+      success: [valid]
