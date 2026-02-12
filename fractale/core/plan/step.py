@@ -24,8 +24,10 @@ class Step:
         print(f"   type: '{self.type}'")
         if self.tool:
             print(f"   call: '{self.tool}'")
-        else:
+        if self.prompt:
             print(f"   call: '{self.prompt}'")
+        if self.instruction:
+            print(f"   call: prompt")
 
     @property
     def tools(self):
@@ -106,6 +108,10 @@ class Step:
         return self.spec.get("prompt")
 
     @property
+    def instruction(self):
+        return self.spec.get("instruction")
+
+    @property
     def allow_tools(self):
         """
         If False, the Agent is forbidden from calling tools.
@@ -121,6 +127,10 @@ class Step:
     def tool(self):
         return self.spec.get("tool")
 
+    @property
+    def rules(self):
+        return self.spec.get("rules")
+
     def match_rules(self, result):
         """
         Given output from an agent, check against rules.
@@ -129,7 +139,7 @@ class Step:
         Result should be a dict (first preference) or string an LLM response
         We return the first transition state that matches a rule.
         """
-        for transition, rules in (self.spec.get("rules") or {}).items():
+        for transition, rules in (self.rules or {}).items():
             for rule in rules:
                 if evaluate(rule, context=result):
                     print(f"Matched Rule '{rule}' for transition '{transition}'")

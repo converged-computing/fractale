@@ -87,6 +87,12 @@ class Manager(AgentBase):
                 if sm.current_state_name == self.plan.initial_state:
                     self.ui.log(f"🧠 Loop {loops}/{max_loops}")
                     loops += 1
+
+                # No next state, we have to complete
+                if not sm.current_state_name:
+                    self.ui.log(f"🌀 State Machine Complete")
+                    break
+
                 # TODO Ask user what to do next
                 # This doesn't work in async
 

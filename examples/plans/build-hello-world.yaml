@@ -4,9 +4,9 @@ steps:
   - name: generate
     type: agent
     instruction: |
-     You are a Dockerfile build agent. Build a container for LAMMPS called ghcr.io/converged-computing/lammps:latest with an ubuntu:24.04 base.
+     You are a Dockerfile build agent. Build a container hello-world with an ubuntu:2404 base that says "Hello World."
      You MUST choose a tool to build the dockerfile and verify success with the build_container tool endpoint.
     rules:
       success: [returncode == 0]
     transitions:
-      failed: generate
+      failure: generate

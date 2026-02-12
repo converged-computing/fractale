@@ -53,7 +53,7 @@ class WorkerAgent(AgentBase):
         self.init_backend(context)
 
         try:
-            result = asyncio.run(self.run_loop(self.step.prompt, context))
+            result = asyncio.run(self.run_loop(context))
             self.metadata["status"] = "success"
 
         except Exception as e:
@@ -66,20 +66,31 @@ class WorkerAgent(AgentBase):
         result.show()
         return result
 
-    async def run_loop(self, prompt, context):
+    async def run_loop(self, context):
         """
         Sets up connections and runs the async loop.
         """
         async with self.client:
 
-            # Derive the persona (prompt) from mcp server.
-            inputs = utils.resolve_templates(
-                inputs=self.step.spec.get("inputs", {}), context=context, schema=self.step.arguments
-            )
-            instruction = await self.fetch_persona(prompt, inputs)
+            # Two options here:
+            # 1. Derive the persona (prompt) from mcp server.
+            if self.step.prompt is not None:
+                inputs = utils.resolve_templates(
+                    inputs=self.step.spec.get("inputs", {}),
+                    context=context,
+                    schema=self.step.arguments,
+                )
+                instruction = await self.fetch_persona(self.step.prompt, inputs)
 
-            # Since we are moving between steps, add the context
-            instruction += self.add_context(instruction, context, self.step.arguments)
+                # Since we are moving between steps, add the context
+                instruction += self.add_context(instruction, context, self.step.arguments)
+
+            # 2. We get handed a prompt directly
+            elif self.step.instruction is not None:
+                instruction = self.step.instruction.strip()
+
+            else:
+                raise ValueError("An agent must be given a prompt or instruction.")
 
             # Once we get here, we have a specific instruction (with a persona)
             # And we want to allow the agent to work on the task in a loop
@@ -185,16 +196,29 @@ class WorkerAgent(AgentBase):
             # Process all calls requested by LLM
             tool_results = []
             for call in calls:
-                self.ui.log(f"🛠️  Calling: {call['name']} with args {call['args']}")
+                self.ui.log(f"🛠️  Calling: {call['name']}")
                 result = await self.client.call_tool(call["name"], call["args"])
                 result = results.parse_response(result, metrics)
+                result.show()
+
+                # Stop early if we have a transition
+                transition = self.step.match_rules(result.data or result.content)
+                if transition:
+                    result.transition = transition
+                    if result is not None:
+                        result.attempts = loops
+                    return result
+
+                # Otherwise, keep calling (and we will ask agent to assess result)
                 call["result"] = result.content
 
                 # Give the agent the tool result and ask to continue or return
                 tool_results.append(call)
 
+            # Case 1: we have a tool call, and no rules. We need the agent to check
             if tool_results:
                 instruction = check_call_results(tool_results)
+                continue
 
             # No error? We assume this is criteria for finishing the step
             elif not result.error:
@@ -202,12 +226,14 @@ class WorkerAgent(AgentBase):
                 break
 
             # If there is an error, we update the instruction to show it, or run out of loops and exit
-            print(f"{self.step.prefix} There WAS an error.")
+            elif result.error:
+                print(f"{self.step.prefix} There WAS an error.")
 
-            # Use the debug agent to generate a response to give back
-            response = self.debug_agent.ask(result.error)
-            logger.panel(response.content, title="Debug Agent Response", color="blue")
-            instruction = response.content
+                # Use the debug agent to generate a response to give back
+                response = self.debug_agent.ask(result.error)
+                logger.panel(response.content, title="Debug Agent Response", color="blue")
+                instruction = response.content
+                continue
 
         if result is not None:
             result.attempts = loops
