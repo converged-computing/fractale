@@ -45,10 +45,11 @@ class AgentBase:
             # Validate and set schemas on plan steps
             for step in self.plan.states.values():
                 if step.type == "agent":
-                    if step.prompt in prompt_map:
-                        step.set_schema(prompt_map[step.prompt])
-                    else:
-                        sys.exit(f"⚠️  Prompt '{step.prompt}' not found on server during init.")
+                    if step.prompt is not None:
+                        if step.prompt in prompt_map:
+                            step.set_schema(prompt_map[step.prompt])
+                        else:
+                            sys.exit(f"⚠️  Prompt '{step.prompt}' not found on server during init.")
 
                 elif step.type == "tool":
                     if step.tool in tool_map:

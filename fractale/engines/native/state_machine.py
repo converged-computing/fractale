@@ -56,9 +56,14 @@ class WorkflowStateMachine:
             raise ValueError(f"No runner for type '{step.type}'")
 
         # Merge into temp context for execution
-        step_inputs = utils.resolve_templates(
-            step.spec.get("inputs", {}), self.context, step.schema
-        )
+        # Currently if the user provides an instruction directly, we are likely
+        # not to have inputs here.
+        if step.schema:
+            step_inputs = utils.resolve_templates(
+                step.spec.get("inputs", {}), self.context, step.schema
+            )
+        else:
+            step_inputs = {}
         exec_context = self.context.copy()
         exec_context.update(step_inputs)
 

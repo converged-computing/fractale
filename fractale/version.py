@@ -1,10 +1,10 @@
 __version__ = "0.0.1"
 AUTHOR = "Vanessa Sochat"
 AUTHOR_EMAIL = "vsoch@users.noreply.github.com"
-NAME = "fractale-mcp"
-PACKAGE_URL = "https://github.com/compspec/fractale-mcp"
+NAME = "fractale"
+PACKAGE_URL = "https://github.com/converged-computing/fractale"
 KEYWORDS = "cluster, orchestration, transformer, jobspec, flux"
-DESCRIPTION = "Agentic framework and MCP tools for HPC orchestration"
+DESCRIPTION = "Agentic framework for HPC orchestration"
 LICENSE = "LICENSE"
 
 
