@@ -17,8 +17,8 @@ class ModelConfig:
         context = context or {}
 
         # The llm provider is the backend
-        provider = context.get("backend") or os.environ.get("LLM_PROVIDER", "gemini")
-        model = context.get("model") or os.environ.get("LLM_MODEL")
+        provider = context.get("backend") or os.environ.get("FRACTALE_LLM_PROVIDER", "gemini")
+        model = context.get("model") or os.environ.get("FRACTALE_LLM_MODEL")
 
         # I'm not sure I like this approach yet. The model config here would discover
         # credentials from the environment each time is it init'd. Is that something

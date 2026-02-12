@@ -1,3 +1,5 @@
+import os
+
 from fractale.core.plan import Plan
 
 
@@ -10,6 +12,9 @@ def get_engine(plan, engine="native", backend="gemini", ui=None, max_attempts=5,
     """
     # This is loading the plan path
     plan = Plan(plan)
+
+    # Config discovers from environment
+    os.environ["FRACTALE_LLM_PROVIDER"] = backend
 
     # State machine orchestration
     if engine == "native":
