@@ -30,6 +30,12 @@ The following variables can be set in the environment.
 | `OPENAI_API_KEY` | API Key for an OpenAI model | unset |
 | `OPENAI_BASE_URL` | Base url for OpenAI | unset |
 
+Note that for provider, you can also designate on the command line. The default is Gemini (`gemini`). To change:
+
+```bash
+fractale agent --backend openai ./examples/plans/transform-retry.yaml
+```
+
 ### Agents
 
 The `fractale agent` command provides means to run build, job generation, and deployment agents.
