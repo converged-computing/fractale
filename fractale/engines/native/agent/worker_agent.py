@@ -196,7 +196,13 @@ class WorkerAgent(AgentBase):
             # Process all calls requested by LLM
             tool_results = []
             for call in calls:
-                self.ui.log(f"🛠️  Calling: {call['name']}")
+                if call["args"]:
+                    args = json.dumps(call["args"])
+                    logger.panel(
+                        args, title=f"🛠️  Calling: {call['name']}", color="cyan", truncate=800
+                    )
+                else:
+                    logger.info(f"🛠️  Calling: {call['name']}")
                 result = await self.client.call_tool(call["name"], call["args"])
                 result = results.parse_response(result, metrics)
                 result.show()
