@@ -31,6 +31,8 @@ class Manager(AgentBase):
         self.database = database
         self.metadata = {"status": "Pending"}
         self.init()
+        # Cache for persistent agents
+        self.agent_cache = {}
         self.agent = HelperAgent(name="state-machine-helper", ui=self.ui)
 
     def run(self, context):
@@ -113,13 +115,20 @@ class Manager(AgentBase):
         # Prefer step limit, fallback to global manager limit
         max_attempts = step.spec.get("inputs", {}).get("max_attempts", self.max_attempts)
 
+        # Does the step want to use a cached (persistent) model?
+        persist = step.spec.get("persist")
+
         # The worker agent will work on successfully executing a step
-        agent = WorkerAgent(
-            name=step.name,
-            step=step,
-            max_attempts=max_attempts,
-            ui=self.ui,
-        )
+        agent = None
+        if persist:
+            agent = self.agent_cache.get(step.name)
+        if agent is None:
+            agent = WorkerAgent(
+                name=step.name,
+                step=step,
+                max_attempts=max_attempts,
+                ui=self.ui,
+            )
         return agent.run(context)
 
     def run_tool(self, step, context=None):
