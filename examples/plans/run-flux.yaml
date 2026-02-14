@@ -1,0 +1,10 @@
+name: LAMMPS run with Flux
+steps:
+  - name: optimize
+    type: agent
+    persist: true
+    instruction: You are a Flux workload manager expert. We need to run lammps (lmp) with Flux on a small cluster, 2 nodes. First use flux tools to see available resources and input data files, which you can find in /code. Write a command that will optimize the figure of merit, the M- or K- atom steps per second output in the log. Then submit a job for LAMMPS. Use the wait interspersed with the flux job info endpoint to check the status of the job. When the job is finished, use the flux logs mcp endpoint to get the log and read the figure out merit. Read the figure  of merit and decide to try again or not. While you are not done, you MUST always request a tool call for the next action you'd like to take. When you are done, you MUST return a json structure with "done" set to true.
+    rules:
+      success: [done]
+    transitions:
+      failure: optimize

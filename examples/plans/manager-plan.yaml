@@ -1,0 +1,5 @@
+name: LAMMPS run with Flux
+steps:
+  - name: planner
+    type: plan
+    instruction: I want to run lammps.

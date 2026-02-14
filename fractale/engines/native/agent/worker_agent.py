@@ -39,33 +39,6 @@ class WorkerAgent(AgentBase):
         # Debug Agent
         self.debug_agent = DebugAgent()
 
-    def run(self, context):
-        """
-        Main entry point called by the Manager.
-
-        run -> run_loop (prompt) -> process_loop (inner loop)
-        """
-        start_time = time.time()
-        self.metadata["status"] = "running"
-
-        # Setup fastmcp client and choose a backend (before async)
-        self.init()
-        self.init_backend(context)
-
-        try:
-            result = asyncio.run(self.run_loop(context))
-            self.metadata["status"] = "success"
-
-        except Exception as e:
-            self.metadata["status"] = "failed"
-            result = results.StepResult(str(e))
-
-        finally:
-            self.metadata["times"]["execution"] = time.time() - start_time
-
-        result.show()
-        return result
-
     async def run_loop(self, context):
         """
         Sets up connections and runs the async loop.
@@ -196,16 +169,7 @@ class WorkerAgent(AgentBase):
             # Process all calls requested by LLM
             tool_results = []
             for call in calls:
-                if call["args"]:
-                    args = json.dumps(call["args"])
-                    logger.panel(
-                        args, title=f"🛠️  Calling: {call['name']}", color="cyan", truncate=800
-                    )
-                else:
-                    logger.info(f"🛠️  Calling: {call['name']}")
-                result = await self.client.call_tool(call["name"], call["args"])
-                result = results.parse_response(result, metrics)
-                result.show()
+                result = await self.call_tool(call, metrics)
 
                 # Stop early if we have a transition
                 transition = self.step.match_rules(result.data or result.content)
