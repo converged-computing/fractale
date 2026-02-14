@@ -3,6 +3,7 @@ import logging
 from rich import print
 
 import fractale.utils as utils
+from fractale.core.plan.step import Step
 from fractale.engines.native.agent.manager_agent import ManagerAgent
 
 logger = logging.getLogger(__name__)
@@ -46,16 +47,23 @@ class WorkflowStateMachine:
         """
         step = self.states[self.current_state_name]
 
+        # Are we terminal? That sounds dark...
+        if step.type == "final":
+            print("Current step is final, returning finished")
+            return None, True
+
         # Execute via callback function
         step.show()
-        runner = self.callbacks.get(step.type)
-        if not runner:
-            raise ValueError(f"No runner for type '{step.type}'")
 
         # If we have a plan step, we need to interact with the user
         # and get updates to the plan.
         if step.type == "plan":
-            return self.run_planner(step)
+            self.run_planner(step)
+            step = self.states[self.current_state_name]
+
+        runner = self.callbacks.get(step.type)
+        if not runner:
+            raise ValueError(f"No runner for type '{step.type}'")
 
         # Merge into temp context for execution
         # Currently if the user provides an instruction directly, we are likely
@@ -132,16 +140,14 @@ class WorkflowStateMachine:
         """
         Run the planner. An interactive process to design steps and a plan.
         """
-        for i, step in enumerate(self.planner.run(step)):
+        result = self.planner.run(step)
+        for i, step_data in enumerate(result.data["steps"]):
+            step = Step(step_data)
             # The first step is the initial step
             if i == 0:
                 self.current_state_name = step.name
             self.states[step.name] = step
-        print("POST PLAN")
-        import IPython
-
-        IPython.embed()
-        # TODO remove plan step for next time?
+        print(self.states)
 
     def ask_next_step(self, result):
         """

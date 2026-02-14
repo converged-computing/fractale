@@ -1,3 +1,4 @@
+from fractale.core.plan import Plan
 from fractale.db import get_database
 from fractale.engines import get_engine
 
@@ -16,12 +17,20 @@ def main(args, extra, **kwargs):
     if database:
         database.connect()
 
-    # Instantiate the Engine (native state machine)
+    # Instantiate the Engine without a plan
     engine = get_engine(
         engine=args.engine,
-        plan=args.plan,
         backend=args.backend,
         max_attempts=args.max_attempts,
         database=database,
     )
+    # Define the plan from the instruction
+    prompt = " ".join(args.instruction)
+    plan = Plan(
+        {
+            "name": "Agentic plan",
+            "steps": [{"name": "planner", "type": "plan", "instruction": prompt}],
+        }
+    )
+    engine.plan = plan
     run_fractale(engine, args.mode, database, context)

@@ -3,7 +3,9 @@ import os
 from fractale.core.plan import Plan
 
 
-def get_engine(plan, engine="native", backend="gemini", ui=None, max_attempts=5, database=None):
+def get_engine(
+    plan=None, engine="native", backend="gemini", ui=None, max_attempts=5, database=None
+):
     """
     Get the fractale engine! 🚘
 
@@ -11,7 +13,8 @@ def get_engine(plan, engine="native", backend="gemini", ui=None, max_attempts=5,
     and AutoGen here, but I cannot (do not want) to focus development on three different engines at once.
     """
     # This is loading the plan path
-    plan = Plan(plan)
+    if plan is not None:
+        plan = Plan(plan)
 
     # Config discovers from environment
     os.environ["FRACTALE_LLM_PROVIDER"] = backend

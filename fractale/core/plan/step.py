@@ -14,7 +14,7 @@ class Step:
 
     def __init__(self, spec):
         self.spec = spec
-        self.schema = None
+        self.schema = self.spec.get("schema")
 
     def show(self):
         """
@@ -84,7 +84,7 @@ class Step:
     def arguments(self):
         if "inputSchema" in self.schema:
             return set(self.schema["inputSchema"]["properties"].keys())
-        return set([x["name"] for x in self.schema["arguments"]])
+        return set([x["name"] for x in self.schema.get("arguments") or {}])
 
     @property
     def prefix(self):

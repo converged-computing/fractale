@@ -47,7 +47,8 @@ class Manager(AgentBase):
             if k not in context:
                 context[k] = v
 
-        # Connect and validate against server
+        # Connect and validate against server. We save the prompts and tools
+        # because we will need schemas later for dynamic generation of plans
         asyncio.run(self.connect_and_validate())
 
         # Setup State Machine Engine
