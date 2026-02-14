@@ -170,4 +170,15 @@ class GeminiBackend(LLMBackend):
                 if v is not None and isinstance(v, int):
                     usage[k] = v
 
-        return response.text, usage, calls
+        # I noticed we get a warning by returning response.text when we have
+        # tool calls. So we extract text parts to avoid the SDK warning
+        text_parts = []
+        if response.candidates:
+            for part in response.candidates[0].content.parts:
+                if part.text:
+                    text_parts.append(part.text)
+            final_text = "".join(text_parts)
+        else:
+            final_text = response.text
+
+        return final_text, usage, calls

@@ -56,7 +56,7 @@ class Manager(AgentBase):
         sm = WorkflowStateMachine(
             states=self.plan.states,
             context=context,
-            callbacks={"agent": self.run_agent, "tool": self.run_tool},
+            callbacks={"agent": self.run_agent, "tool": self.run_tool, "plan": self.update_plan},
             ui=self.ui,
         )
 
@@ -130,6 +130,15 @@ class Manager(AgentBase):
                 ui=self.ui,
             )
         return agent.run(context)
+
+    def update_plan(self, step, context=None):
+        """
+        Update plan is a simple prompt that is intended to run (and generate) steps
+        that follow. We insert them into the state machine.
+        """
+        print(step)
+        print(step.get("instruction"))
+        print("UPDATE PLAN CALLED")
 
     def run_tool(self, step, context=None):
         """

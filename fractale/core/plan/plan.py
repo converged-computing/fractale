@@ -47,6 +47,14 @@ class Plan:
         for i, step_data in enumerate(raw_steps):
             name = step_data["name"]
 
+            # Assume an undefined step is a plan with an instruction
+            if "type" not in step_data:
+                step_data["type"] = "plan"
+
+            # If we have a plan, we MUST have an instruction
+            if step_data["type"] == "plan" and "instruction" not in step_data:
+                raise ValueError("fStep {name} is a plan missing an instruction.")
+
             # If no transitions defined, assume linear flow (e.g., MuMMI)
             if "transitions" not in step_data:
                 next_node = step_names[i + 1] if (i + 1 < len(step_names)) else "success"

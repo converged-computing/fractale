@@ -35,6 +35,7 @@ class HelperAgent(AgentBase):
     def __init__(self, name: str, ui=None):
         self.name = name
         self.ui = ui or CLIAdapter()
+        self.reset()
         self.init()
         self.init_backend()
 
@@ -52,9 +53,6 @@ class DebugAgent(HelperAgent):
     """
     The debug agent is given a scoped task to summarize and debug an error.
     """
-
-    def __init__(self, name: str = "debug-agent", ui=None):
-        super().__init__(name=name, ui=ui)
 
     def debug(self, error):
         """

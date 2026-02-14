@@ -3,6 +3,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
+import fractale.utils as utils
 from fractale.logger.logger import logger
 
 
@@ -119,7 +120,7 @@ def parse_response(raw_response: Any, metrics: dict = None):
     # Attempt JSON Parsing (to get structured data)
     data = None
     try:
-        data = json.loads(content)
+        data = utils.get_code_block(content)
     except (json.JSONDecodeError, TypeError):
         pass
     return StepResult(content=content, data=data, metrics=metrics)
