@@ -66,16 +66,31 @@ def get_parser():
         "plan",
         help="provide a plan to a manager",
     )
-    agent.add_argument("--mode", choices=["cli", "tui", "web"], default="cli")
-    agent.add_argument("--engine", choices=["native", "langchain", "autogen"], default="native")
-    agent.add_argument("--backend", choices=["openai", "gemini", "llama"], default="gemini")
-    agent.add_argument("--database", help="URI for result storage (file://path or sqlite://path)")
-    agent.add_argument(
-        "--max-attempts",
-        help="Maximum attempts for a manager or individual agent",
-        default=None,
-        type=int,
+    prompt = subparsers.add_parser(
+        "prompt",
+        formatter_class=argparse.RawTextHelpFormatter,
+        description="run an agent",
     )
+    prompt.add_argument(
+        "instruction", help="provide a prompt instruction to the manager", nargs="*"
+    )
+
+    # Agent and prompt take the same inputs
+    for command in [agent, prompt]:
+        command.add_argument("--mode", choices=["cli", "tui", "web"], default="cli")
+        command.add_argument(
+            "--engine", choices=["native", "langchain", "autogen"], default="native"
+        )
+        command.add_argument("--backend", choices=["openai", "gemini", "llama"], default="gemini")
+        command.add_argument(
+            "--database", help="URI for result storage (file://path or sqlite://path)"
+        )
+        command.add_argument(
+            "--max-attempts",
+            help="Maximum attempts for a manager or individual agent",
+            default=None,
+            type=int,
+        )
     return parser
 
 
@@ -112,6 +127,8 @@ def run_fractale():
     # Here we can assume instantiated to get args
     if args.command == "agent":
         from .agent import main
+    elif args.command == "prompt":
+        from .prompt import main
     else:
         help(1)
     main(args, extra)

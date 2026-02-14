@@ -1,10 +1,7 @@
-import asyncio
 import json
-import time
 
 from rich import print
 
-import fractale.engines.native.backends as backends
 import fractale.engines.native.result as results
 import fractale.utils as utils
 from fractale.logger.logger import logger
@@ -37,7 +34,7 @@ class WorkerAgent(AgentBase):
             "steps": [],
         }
         # Debug Agent
-        self.debug_agent = DebugAgent()
+        self.debug_agent = DebugAgent(name="debug-agent", ui=self.ui)
 
     async def run_loop(self, context):
         """

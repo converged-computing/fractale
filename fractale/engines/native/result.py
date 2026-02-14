@@ -120,7 +120,7 @@ def parse_response(raw_response: Any, metrics: dict = None):
     # Attempt JSON Parsing (to get structured data)
     data = None
     try:
-        data = utils.get_code_block(content)
+        data = json.loads(utils.extract_code_block(content))
     except (json.JSONDecodeError, TypeError):
         pass
     return StepResult(content=content, data=data, metrics=metrics)
