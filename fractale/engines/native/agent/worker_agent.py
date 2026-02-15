@@ -40,6 +40,7 @@ class WorkerAgent(AgentBase):
         """
         Sets up connections and runs the async loop.
         """
+
         async with self.client:
 
             # Two options here:
@@ -52,7 +53,10 @@ class WorkerAgent(AgentBase):
                 instruction = self.step.instruction.strip()
 
             else:
-                raise ValueError("An agent must be given a prompt or instruction.")
+                logger.warning("Agent is missing a prompt or instruction")
+                instruction = self.debug_agent.ask(
+                    f"This step is missing an instruction. Please look at the step and generate an instruction for the agent. Inputs are {self.step.inputs}"
+                )
 
             # Once we get here, we have a specific instruction (with a persona)
             # And we want to allow the agent to work on the task in a loop

@@ -176,6 +176,8 @@ class ManagerAgent(HelperAgent):
                 if step["tool"] not in self.tool_map:
                     raise ValueError("Agent requested tool that does not exist")
                 step["schema"] = self.tool_map.get(step["tool"])
+                # Force the type to be tool, we don't have a use case for it to not be
+                step["type"] = "tool"
                 new_steps.append(step)
         return new_steps
 
