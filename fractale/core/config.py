@@ -10,15 +10,13 @@ class ModelConfig:
     base_url: str = None
 
     @classmethod
-    def from_context(cls, context: dict = None):
+    def from_environment(cls):
         """
         Extracts config from the Blackboard Context (YAML Inputs).
         """
-        context = context or {}
-
         # The llm provider is the backend
-        provider = context.get("backend") or os.environ.get("FRACTALE_LLM_PROVIDER", "gemini")
-        model = context.get("model") or os.environ.get("FRACTALE_LLM_MODEL")
+        provider = os.environ.get("FRACTALE_LLM_PROVIDER", "gemini")
+        model = os.environ.get("FRACTALE_LLM_MODEL")
 
         # I'm not sure I like this approach yet. The model config here would discover
         # credentials from the environment each time is it init'd. Is that something

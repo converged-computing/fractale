@@ -104,7 +104,7 @@ class ManagerAgent(HelperAgent):
         self.prompt_map = {}
         self.tool_map = {}
 
-    async def run_loop(self, step):
+    async def run_loop(self, step, **kwargs):
         """
         Perform the debug task and return a Helper agent response
         """

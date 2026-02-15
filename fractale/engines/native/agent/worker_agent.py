@@ -36,7 +36,7 @@ class WorkerAgent(AgentBase):
         # Debug Agent
         self.debug_agent = DebugAgent(name="debug-agent", ui=self.ui)
 
-    async def run_loop(self):
+    async def run_loop(self, *args, **kwargs):
         """
         Sets up connections and runs the async loop.
         """
@@ -46,10 +46,6 @@ class WorkerAgent(AgentBase):
             # 1. Derive the persona (prompt) from mcp server.
             if self.step.prompt is not None:
                 instruction = await self.fetch_persona(self.step.prompt, self.step.inputs)
-
-                # Since we are moving between steps, add the context
-                # TODO do we want to add additional context here from previous steps?
-                # instruction += self.add_context(instruction, context, self.step.arguments)
 
             # 2. We get handed a prompt directly
             elif self.step.instruction is not None:
@@ -99,11 +95,10 @@ class WorkerAgent(AgentBase):
         except:
             return instruction
 
-    async def process_loop(self, instruction, context):
+    async def process_loop(self, instruction):
         """
         We need to return on some state of success or ultimate failure.
         """
-        max_loops = context.get("max_attempts") or self.max_attempts
         loops = 0
         result = None
 
@@ -112,7 +107,7 @@ class WorkerAgent(AgentBase):
         use_tools = self.step.allow_tools or has_tools
 
         # Each step internally can go up to some max tries
-        while loops < max_loops:
+        while loops < self.step.max_attempts:
             # Start counting at 1. Like Matlab
             loops += 1
             self.show_instruction(instruction)

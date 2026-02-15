@@ -1,8 +1,8 @@
+import json
 import logging
 
 from rich import print
 
-import fractale.utils as utils
 from fractale.core.plan.step import Step
 from fractale.engines.native.agent.manager_agent import ManagerAgent
 
@@ -117,7 +117,6 @@ class WorkflowStateMachine:
             if i == 0:
                 self.current_state_name = step.name
             self.states[step.name] = step
-        print(self.states)
 
     def ask_next_step(self, result):
         """
