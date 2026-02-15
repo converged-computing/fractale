@@ -14,6 +14,8 @@ class AgentBase(AgentBase):
     State machine agent base
     """
 
+    agent_result_truncate = 800
+
     def run(self, context):
         """
         Main entry point called by the Manager.
@@ -38,7 +40,7 @@ class AgentBase(AgentBase):
         finally:
             self.metadata["times"]["execution"] = time.time() - start_time
 
-        result.show()
+        result.show(truncate=self.agent_result_truncate)
         return result
 
     async def call_tool(self, call, metrics=None):

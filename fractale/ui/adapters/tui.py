@@ -285,10 +285,9 @@ class FractaleApp(App):
         ("q", "quit", "Quit"),
     ]
 
-    def __init__(self, manager, context):
+    def __init__(self, manager):
         super().__init__()
         self.manager = manager
-        self.context = context
         self.current_step_widget = None
 
     def compose(self) -> ComposeResult:
@@ -312,7 +311,7 @@ class FractaleApp(App):
 
         try:
             self.call_from_thread(self.action_stop_loading)
-            self.manager.run(self.context)
+            self.manager.run()
         except Exception as e:
             tb = traceback.format_exc()
             self.call_from_thread(self.action_log, "\n[bold red]💥 CRITICAL FAILURE[/bold red]")

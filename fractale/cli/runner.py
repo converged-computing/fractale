@@ -1,7 +1,7 @@
 from rich import print
 
 
-def run_fractale(engine, mode, database, context):
+def run_fractale(engine, mode, database):
     """
     Shared function to run fractale between agent/prompt commands
     """
@@ -14,20 +14,20 @@ def run_fractale(engine, mode, database, context):
 
             # The App takes ownership of the Engine.
             # It will instantiate TextualAdapter and assign it to engine.ui
-            app = FractaleApp(engine, context)
+            app = FractaleApp(engine)
             result = app.run()
 
         elif mode == "web":
             from fractale.ui.adapters.web import WebAdapter
 
             engine.ui = WebAdapter(url="http://localhost:3000")
-            result = engine.run(context)
+            result = engine.run()
 
         else:
             from fractale.ui.adapters.cli import CLIAdapter
 
             engine.ui = CLIAdapter()
-            result = engine.run(context)
+            result = engine.run()
 
     # Clean up or close database if relevant
     finally:

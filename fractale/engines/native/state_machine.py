@@ -14,9 +14,8 @@ class WorkflowStateMachine:
     Dynamic State Machine execution engine.
     """
 
-    def __init__(self, states, context, callbacks, ui=None):
+    def __init__(self, states, callbacks, ui=None):
         self.states = states
-        self.context = context
         self.ui = ui
 
         # This is manager.run_agent and manager.run_tool
@@ -65,25 +64,13 @@ class WorkflowStateMachine:
         if not runner:
             raise ValueError(f"No runner for type '{step.type}'")
 
-        # Merge into temp context for execution
-        # Currently if the user provides an instruction directly, we are likely
-        # not to have inputs here.
-        if step.schema:
-            step_inputs = utils.resolve_templates(
-                step.spec.get("inputs", {}), self.context, step.schema
-            )
-        else:
-            step_inputs = {}
-        exec_context = self.context.copy()
-        exec_context.update(step_inputs)
-
         # This returns a result object with content and error
-        result = runner(step, exec_context)
-        self.update_context(step.name, result)
-
-        # Save previous result and last error in context
+        result = runner(step)
         if result.error:
             print(result.error)
+
+        # If we have output, set on the step
+        step.set_outputs(result.data)
 
         # Determine Transition
         if result.transition is not None:
@@ -117,32 +104,15 @@ class WorkflowStateMachine:
             "state": outcome,
         }
 
-    def update_context(self, step_name, result):
-        """
-        Parses results and updates the context.
-        E.g., render {{ result.field }} access in Jinja2.
-        """
-        # If we sniff an error, call it an error
-        if result.has_error:
-            self.context["error"] = result.error
-
-        # Set the result for the previous step, first preference to parsed
-        if result.data is not None:
-            self.context.result = result.data
-            self.context[f"{step_name}_result"] = result.data
-
-        # Second preference to raw strings
-        elif result.content is not None:
-            self.context.result = result.content
-            self.context[f"{step_name}_result"] = result.content
-
-    def run_planner(self, step):
+    def run_planner(self, plan_step):
         """
         Run the planner. An interactive process to design steps and a plan.
         """
-        result = self.planner.run(step)
+        result = self.planner.run(plan_step)
         for i, step_data in enumerate(result.data["steps"]):
             step = Step(step_data)
+            # Add the workflow reference to it
+            step.workflow = plan_step.workflow
             # The first step is the initial step
             if i == 0:
                 self.current_state_name = step.name

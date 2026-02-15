@@ -9,9 +9,6 @@ def main(args, extra, **kwargs):
     """
     Run an agent workflow using the configured engine.
     """
-    # Prepare Context from Arguments
-    context = vars(args)
-
     # Prepare a database for saving results (optional)
     database = get_database(args.database)
     if database:
@@ -33,4 +30,4 @@ def main(args, extra, **kwargs):
         }
     )
     engine.plan = plan
-    run_fractale(engine, args.mode, database, context)
+    run_fractale(engine, args.mode, database)

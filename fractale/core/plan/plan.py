@@ -66,6 +66,9 @@ class Plan:
 
             compiled[name] = Step(step_data)
 
+        # Every step essentially holds a pointer to the steps structure
+        for name, step in compiled.items():
+            step.workflow = compiled
         return compiled
 
     @property

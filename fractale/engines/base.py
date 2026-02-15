@@ -4,8 +4,6 @@ import sys
 from fastmcp import Client
 from fastmcp.client.transports import StreamableHttpTransport
 
-from fractale.logger.logger import logger
-
 
 class AgentBase:
     def reset(self, plan=None):

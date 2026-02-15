@@ -18,8 +18,6 @@ class WebAdapter(UserInterface):
     def on_log(self, message, level="info"):
         self._post("log", {"msg": message})
 
-    # ... other outputs ...
-
     def ask_user(self, question, options=None) -> str:
         # 1. Post the question to the UI
         req_id = f"req_{time.time()}"

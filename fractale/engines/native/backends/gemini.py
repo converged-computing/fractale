@@ -179,6 +179,8 @@ class GeminiBackend(LLMBackend):
                     text_parts.append(part.text)
             final_text = "".join(text_parts)
         else:
+            print("RESPONSE")
+            print(dir(response))
             final_text = response.text
 
         return final_text, usage, calls
