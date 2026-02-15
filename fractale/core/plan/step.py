@@ -1,6 +1,7 @@
 import logging
 
 from boolia import evaluate
+from jinja2 import BaseLoader, Environment
 from rich import print
 
 logger = logging.getLogger(__name__)
@@ -15,6 +16,58 @@ class Step:
     def __init__(self, spec):
         self.spec = spec
         self.schema = self.spec.get("schema")
+        # Inputs and outputs for jinja rendering
+        self.outputs = {}
+
+    @property
+    def inputs(self):
+        """
+        Given inputs and schema, resolve into final current step inputs.
+
+        This currently means we set the inputs for the current step being run. If the
+        step is run again, they might change. The inputs present are always the active
+        or last run.
+        """
+        # If we don't have arguments in the schema, assume the user was incorrect to provide
+        if not self.arguments:
+            return {}
+
+        # Resolve inputs with arguments (schema inputs) and user provided inputs, alon with outputs
+        inputs = self.spec.get("inputs") or {}
+        env = Environment(loader=BaseLoader())
+        final_inputs = {}
+
+        # Resolve provided inputs first (Jinja resolution)
+        resolved_user_inputs = {}
+        for k, v in inputs.items():
+            if isinstance(v, str) and "{{" in v:
+                # Allow for reference of {{ steps.<name>.outputs|inputs.<name> }} || {{ self.outputs.<name> }}
+                try:
+                    resolved_user_inputs[k] = env.from_string(v).render(
+                        {"steps": self.workflow, "outputs": self.outputs, "inputs": self.inputs}
+                    )
+                except Exception as e:
+                    logger.warning(f"Jinja render failed for key '{k}': {e}")
+                    resolved_user_inputs[k] = v
+            else:
+                resolved_user_inputs[k] = v
+
+        # Reconcile with Schema
+        # # We only care about keys the function actually accepts
+        for arg in self.arguments:
+            if arg in resolved_user_inputs:
+                # Plan provided it, so use it
+                final_inputs[arg] = resolved_user_inputs[arg]
+        return final_inputs
+
+    def set_outputs(self, outputs):
+        """
+        Set outputs on the step.
+        """
+        if not outputs:
+            self.outputs = {}
+        else:
+            self.outputs = outputs
 
     def show(self):
         """
@@ -47,39 +100,6 @@ class Step:
         """
         self.schema = schema
 
-    def partition_inputs(self, full_context: dict) -> tuple[dict, dict]:
-        """
-        Splits context into Direct Arguments vs Supplemental Context.
-        """
-        # Fallback if schema missing
-        if self.schema is None:
-            return full_context, {}
-
-        prompt_args = {}
-        background_info = {}
-
-        # Keys to ignore
-        ignored = {
-            "agent_config",
-            "managed",
-            "max_loops",
-            "max_attempts",
-            "result",
-            "error_message",
-            "schemas",
-            "validate",
-        }
-
-        for key, value in full_context.items():
-            if key in self.schema:
-                prompt_args[key] = value
-            elif key not in ignored:
-                background_info[key] = value
-
-        # Useful for debugging
-        print(prompt_args)
-        return prompt_args, background_info
-
     @property
     def arguments(self):
         if "inputSchema" in self.schema:
@@ -106,6 +126,10 @@ class Step:
     @property
     def prompt(self):
         return self.spec.get("prompt")
+
+    @property
+    def max_attempts(self):
+        return self.spec.get("max_attempts")
 
     @property
     def instruction(self):
@@ -148,10 +172,6 @@ class Step:
     @property
     def tools(self):
         return self.spec.get("tools")
-
-    @property
-    def inputs(self):
-        return self.spec.get("inputs", {})
 
     @property
     def transitions(self):

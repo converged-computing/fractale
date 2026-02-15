@@ -4,7 +4,6 @@ import os
 from datetime import datetime
 
 import fractale.utils as utils
-from fractale.core.context import get_context
 from fractale.engines.native.agent import HelperAgent
 from fractale.engines.native.result import parse_response
 from fractale.logger import logger
@@ -22,10 +21,9 @@ class Manager(AgentBase):
     Standalone class (No inheritance from Agent).
     """
 
-    def __init__(self, plan, ui=None, max_attempts=10, backend="gemini", database=None):
+    def __init__(self, plan, ui=None, max_attempts=None, backend="gemini", database=None):
         self.plan = plan
         self.ui = ui or CLIAdapter()
-        self.max_attempts = max_attempts
         self.backend = backend
         self.attempts = 0
         self.database = database
@@ -34,19 +32,17 @@ class Manager(AgentBase):
         # Cache for persistent agents
         self.agent_cache = {}
         self.agent = HelperAgent(name="state-machine-helper", ui=self.ui)
+        self._max_attempts = max_attempts
 
-    def run(self, context):
+    @property
+    def max_attempts(self):
+        return self._max_attempts or 5
+
+    def run(self):
         """
         Main entry point.
         Merges inputs, validates against server, and starts FSM loop.
         """
-        context = get_context(context)
-
-        # Global inputs from plan
-        for k, v in self.plan.global_inputs.items():
-            if k not in context:
-                context[k] = v
-
         # Connect and validate against server. We save the prompts and tools
         # because we will need schemas later for dynamic generation of plans
         asyncio.run(self.connect_and_validate())
@@ -54,28 +50,26 @@ class Manager(AgentBase):
         # Setup State Machine Engine
         # The manager here creates a state machine
         # The state machine is given callbacks for running an agent or tool, defined here.
+        # TODO: if we add plan: update_plan here, we can have plan updates run during workflow
+        # I am not doing this now because I do not think it should be interactive.
         sm = WorkflowStateMachine(
             states=self.plan.states,
-            context=context,
-            callbacks={"agent": self.run_agent, "tool": self.run_tool, "plan": self.update_plan},
+            callbacks={"agent": self.run_agent, "tool": self.run_tool},
             ui=self.ui,
         )
 
         logger.info(f"✅ State Machine Initialized: {len(self.plan.states)} states.")
         self.metadata["status"] = "running"
 
-        # In this context, a loop is a retry, meaning we return to initial state
-        max_loops = context.get("max_attempts") or self.max_attempts or 5
-
         # Start Execution Loop
         tracker = []
         loops = 1
 
         # Log the initial loop
-        self.ui.log(f"🧠 Loop {loops}/{max_loops}")
+        self.ui.log(f"🧠 Loop {loops}/{self.max_attempts}")
 
         try:
-            while loops < max_loops:
+            while loops < self.max_attempts:
                 result = sm.run_cycle()
                 tracker.append(result)
                 logger.info(f"🌀 State Machine Update: {result['transition']}.")
@@ -88,7 +82,7 @@ class Manager(AgentBase):
 
                 # Only count as loop if we have returned to initial state
                 if sm.current_state_name == self.plan.initial_state:
-                    self.ui.log(f"🧠 Loop {loops}/{max_loops}")
+                    self.ui.log(f"🧠 Loop {loops}/{self.max_attempts}")
                     loops += 1
 
                 # No next state, we have to complete
@@ -109,7 +103,7 @@ class Manager(AgentBase):
             logger.error(f"Orchestration failed: {e}")
             raise e
 
-    def run_agent(self, step, context):
+    def run_agent(self, step):
         """
         Runs the WorkerAgent for an 'agent' type step.
         """
@@ -130,29 +124,17 @@ class Manager(AgentBase):
                 max_attempts=max_attempts,
                 ui=self.ui,
             )
-        return agent.run(context)
+        return agent.run()
 
-    def update_plan(self, step, context=None):
-        """
-        Update plan is a simple prompt that is intended to run (and generate) steps
-        that follow. We insert them into the state machine.
-        """
-        print(step)
-        print(step.get("instruction"))
-        print("UPDATE PLAN CALLED")
-
-    def run_tool(self, step, context=None):
+    def run_tool(self, step):
         """
         Runs a deterministic Tool directly (no LLM).
         """
         start_time = datetime.now()
-        tool_args = utils.resolve_templates(
-            inputs=step.spec.get("inputs", {}), context=context, schema=step.arguments
-        )
 
         async def call():
             async with self.client:
-                return await self.client.call_tool(step.tool, tool_args)
+                return await self.client.call_tool(step.tool, step.inputs)
 
         raw_result = utils.run_sync(call())
         duration = (datetime.now() - start_time).total_seconds()

@@ -34,7 +34,7 @@ class StepResult:
             result["attempts"] = self.attempts
         return result
 
-    def show(self):
+    def show(self, truncate=800):
         """
         Show the result!
         """
@@ -42,7 +42,7 @@ class StepResult:
             result = json.dumps(self.data)
         else:
             result = self.content
-        logger.panel(result, title="Agent Result", color="blue", truncate=800)
+        logger.panel(result, title="Agent Result", color="blue", truncate=truncate)
 
     def retry_prompt(self, extra):
         """
@@ -100,7 +100,11 @@ class StepResult:
             return "\n".join(data["errors"])
 
         # Fall back to content if error is there
-        if not data and self.content and re.search(self.content.lower(), "(error|fail|abort)"):
+        if (
+            not data
+            and isinstance(self.content, str)
+            and re.search(self.content.lower(), "(error|fail|abort)")
+        ):
             return self.content
 
 

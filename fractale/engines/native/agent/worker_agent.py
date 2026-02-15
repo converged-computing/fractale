@@ -36,7 +36,7 @@ class WorkerAgent(AgentBase):
         # Debug Agent
         self.debug_agent = DebugAgent(name="debug-agent", ui=self.ui)
 
-    async def run_loop(self, context):
+    async def run_loop(self):
         """
         Sets up connections and runs the async loop.
         """
@@ -45,15 +45,11 @@ class WorkerAgent(AgentBase):
             # Two options here:
             # 1. Derive the persona (prompt) from mcp server.
             if self.step.prompt is not None:
-                inputs = utils.resolve_templates(
-                    inputs=self.step.spec.get("inputs", {}),
-                    context=context,
-                    schema=self.step.arguments,
-                )
-                instruction = await self.fetch_persona(self.step.prompt, inputs)
+                instruction = await self.fetch_persona(self.step.prompt, self.step.inputs)
 
                 # Since we are moving between steps, add the context
-                instruction += self.add_context(instruction, context, self.step.arguments)
+                # TODO do we want to add additional context here from previous steps?
+                # instruction += self.add_context(instruction, context, self.step.arguments)
 
             # 2. We get handed a prompt directly
             elif self.step.instruction is not None:
@@ -64,30 +60,9 @@ class WorkerAgent(AgentBase):
 
             # Once we get here, we have a specific instruction (with a persona)
             # And we want to allow the agent to work on the task in a loop
-            response = await self.process_loop(instruction, context)
+            response = await self.process_loop(instruction)
 
         return response
-
-    def add_context(self, instruction, context, arguments=None):
-        """
-        Appends the Blackboard variables to the system prompt so the LLM knows the state of the world.
-        """
-        arguments = arguments or {}
-        if not context:
-            return instruction
-
-        info = "\n\n### SHARED CONTEXT\n"
-        info += "The following variables are available from previous steps:\n\n"
-
-        for k, v in context.items():
-            if k in arguments:
-                continue
-            if isinstance(v, (dict, list)):
-                val_str = json.dumps(v, indent=2)
-            else:
-                val_str = str(v)
-            info += f"- **{k}**: {val_str}\n"
-        return instruction + info
 
     async def fetch_persona(self, prompt, arguments):
         """

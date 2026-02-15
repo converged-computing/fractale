@@ -23,27 +23,6 @@ class UserInterface(Protocol):
                 logger.info(message)
             return False
 
-    def log_update(self, *args, **kwargs):
-        """
-        Send update message to log (if supports)
-        """
-        if hasattr(self, "on_step_update"):
-            self.on_step_update(*args, **kwargs)
-
-    def log_finish(self, *args, **kwargs):
-        """
-        Send finish message to log (if supports)
-        """
-        if hasattr(self, "on_step_finish"):
-            self.on_step_finish(*args, **kwargs)
-
-    def log_start(self, *args, **kwargs):
-        """
-        Send start message to log (if supports)
-        """
-        if hasattr(self, "on_step_start"):
-            self.on_step_start(*args, **kwargs)
-
     def log_workflow_complete(self, *args, **kwargs):
         """
         The whole plan finishes.
