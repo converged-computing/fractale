@@ -1,3 +1,4 @@
+import copy
 import logging
 
 from boolia import evaluate
@@ -37,15 +38,17 @@ class Step:
         env = Environment(loader=BaseLoader())
         final_inputs = {}
 
+        # Remove self from the steps we are considering - doesn't make sense.
+        workflow = copy.deepcopy(self.workflow)
+        del workflow[self.name]
+
         # Resolve provided inputs first (Jinja resolution)
         resolved_user_inputs = {}
         for k, v in inputs.items():
             if isinstance(v, str) and "{{" in v:
                 # Allow for reference of {{ steps.<name>.outputs|inputs.<name> }} || {{ self.outputs.<name> }}
                 try:
-                    resolved_user_inputs[k] = env.from_string(v).render(
-                        {"steps": self.workflow, "outputs": self.outputs, "inputs": self.inputs}
-                    )
+                    resolved_user_inputs[k] = env.from_string(v).render({"steps": self.workflow})
                 except Exception as e:
                     logger.warning(f"Jinja render failed for key '{k}': {e}")
                     resolved_user_inputs[k] = v
@@ -53,7 +56,7 @@ class Step:
                 resolved_user_inputs[k] = v
 
         # Reconcile with Schema
-        # # We only care about keys the function actually accepts
+        # We only care about keys the function actually accepts
         for arg in self.arguments:
             if arg in resolved_user_inputs:
                 # Plan provided it, so use it

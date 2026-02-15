@@ -7,7 +7,9 @@ import threading
 
 from fastmcp.utilities.logging import get_logger
 from rich import print
+from rich.console import Console
 from rich.panel import Panel
+from rich.syntax import Syntax
 
 
 class LogColors:
@@ -153,6 +155,20 @@ class Logger:
             print(Panel(message, title=title, expand=expand))
         else:
             print(Panel(message, title=title, border_style=border_style, expand=expand))
+
+    def code_panel(
+        self, code_block, title="Result", color="green", language="python", line_numbers=False
+    ):
+        """
+        Prettier code panel syntax!
+
+        Themes: https://pygments.org/styles/
+        """
+        syntax = Syntax(code_block, language, line_numbers=line_numbers)
+        color = color.lower()
+        title = f"[{color}]{title}[/{color}]"
+        code_panel = Panel(syntax, title=title, border_style=color)
+        Console().print(code_panel)
 
     def panel(self, message, title="Result", color="green", truncate=None):
         """

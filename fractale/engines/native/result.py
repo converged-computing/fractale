@@ -39,10 +39,11 @@ class StepResult:
         Show the result!
         """
         if self.data is not None:
-            result = json.dumps(self.data)
+            result = json.dumps(self.data, indent=4)
+            logger.code_panel(result, title="Agent Result", color="blue")
         else:
             result = self.content
-        logger.panel(result, title="Agent Result", color="blue", truncate=truncate)
+            logger.panel(result, title="Agent Result", color="blue", truncate=truncate)
 
     def retry_prompt(self, extra):
         """

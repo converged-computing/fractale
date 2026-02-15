@@ -16,7 +16,7 @@ class AgentBase(AgentBase):
 
     agent_result_truncate = 800
 
-    def run(self, context):
+    def run(self, *args, **kwargs):
         """
         Main entry point called by the Manager.
 
@@ -27,10 +27,10 @@ class AgentBase(AgentBase):
 
         # Setup fastmcp client and choose a backend (before async)
         self.init()
-        self.init_backend(context)
+        self.init_backend()
 
         try:
-            result = asyncio.run(self.run_loop(context))
+            result = asyncio.run(self.run_loop(*args, **kwargs))
             self.metadata["status"] = "success"
 
         except Exception as e:
@@ -59,11 +59,11 @@ class AgentBase(AgentBase):
             result.show()
         return result
 
-    def init_backend(self, context=None):
+    def init_backend(self):
         """
         Create the backend from the model config.
         """
-        cfg = ModelConfig.from_context(context)
+        cfg = ModelConfig.from_environment()
         if cfg.provider not in backends.BACKENDS:
             raise ValueError(f"Provider '{cfg.provider}' not supported.")
         self.backend = backends.BACKENDS[cfg.provider](config=cfg)
