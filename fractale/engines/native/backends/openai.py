@@ -1,126 +1,129 @@
+import asyncio
 import json
+import logging
 import os
-from typing import Any, Dict, List, Tuple
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Dict, List, Optional, Tuple
 
-from rich import print
+from openai import OpenAI
 
 from fractale.core.config import ModelConfig
+from fractale.logger.logger import logger
 
 from .base import LLMBackend
 
+default_model = "gpt-5-mini"
+
 
 class OpenAIBackend(LLMBackend):
-    """
-    Backend to use OpenAI
-    """
-
-    def __init__(self, config: ModelConfig):
+    def __init__(self, config: ModelConfig = None, tools=None):
         super().__init__()
-        import openai
+        self.api_key = getattr(config, "api_key", None) or os.getenv("OPENAI_API_KEY")
+        self.base_url = getattr(config, "base_url", None) or os.getenv("OPENAI_BASE_URL")
+        self.model_name = (
+            getattr(config, "model_name", None) or os.environ.get("OPENAI_MODEL") or default_model
+        )
+        if not self.api_key:
+            raise ValueError("OPENAI_API_KEY environment variable not set.")
 
-        self.client = openai.OpenAI(api_key=config.api_key, base_url=config.base_url)
-        self.model_name = config.model_name
-        self.history = []
-        self.tools_schema = []
-        self._usage = {}
+        self.client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+        self.tools = tools
+        self._history = []
 
-    async def initialize(self, mcp_tools: List[Any]):
+    async def list_tools(self):
         """
-        Convert MCP tools to OpenAI Schema.
+        Fetch and convert MCP tools to OpenAI function format.
         """
-        self.tools_schema = []
-        for tool in mcp_tools:
-            self.tools_schema.append(
-                {
-                    "type": "function",
-                    "function": {
-                        "name": tool.name,
-                        "description": tool.description,
-                        "parameters": tool.inputSchema,
-                    },
-                }
-            )
+        async with self.mcp_client as client:
+            result = await client.list_tools()
+            mcp_tools = result.tools if hasattr(result, "tools") else result
+            openai_tools = []
+            for t in mcp_tools:
+                openai_tools.append(
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": t.name,
+                            "description": t.description or "",
+                            "parameters": t.inputSchema,
+                        },
+                    }
+                )
+            return openai_tools
+
+    def _run_async(self, coro):
+        """
+        Helper to run a coroutine from a sync function,
+        even if an event loop is already running in the current thread.
+        """
+        try:
+            # If no loop is running, we can just use asyncio.run
+            asyncio.get_running_loop()
+            # If we are here, a loop IS running.
+            # We must run the coroutine in a separate thread to avoid blocking/conflicts.
+            with ThreadPoolExecutor() as executor:
+                return executor.submit(asyncio.run, coro).result()
+        except RuntimeError:
+            # No loop running, standard execution
+            return asyncio.run(coro)
 
     def generate_response(
         self,
         prompt: str = None,
-        tool_outputs: List[Dict] = None,
         use_tools: bool = True,
-        one_off: bool = False,
-        tools: List[str] = None,  # <--- NEW ARGUMENT
-    ) -> Tuple[str, str, List[Dict]]:
+        memory: bool = False,
+        tools: List[str] = None,
+    ) -> Tuple[str, Any, List[Dict]]:
         """
-        Generate the response and update history.
+        Generate response synchronously. NO AWAIT REQUIRED.
         """
-        # TODO: Implement one_off logic
+        active_tools = None
+        if use_tools:
+            # Use the helper to resolve the async tool discovery synchronously
+            if not self.tools:
+                self.tools = self._run_async(self.list_tools())
 
-        if prompt:
-            self.history.append({"role": "user", "content": prompt})
-
-        if tool_outputs:
-            for out in tool_outputs:
-                # Match name sanitization (docker-build -> docker_build)
-                llm_name = out["name"].replace("-", "_")
-                self.history.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": out["id"],
-                        "name": llm_name,
-                        "content": str(out["content"]),
-                    }
-                )
-
-        # --- TOOL CONFIGURATION LOGIC ---
-        api_tools = self.tools_schema if self.tools_schema else None
-        tool_choice = "auto" if api_tools else None
-
-        if not use_tools:
-            api_tools = None
-            tool_choice = None
-        elif tools:
-            # 1. Sanitize requested names to match schema
-            target_names = [t.replace("-", "_") for t in tools if t]
-
-            # 2. Filter the schema list passed to the API
-            api_tools = [t for t in self.tools_schema if t["function"]["name"] in target_names]
-
-            # 3. Determine forcing strategy
-            if len(target_names) == 1:
-                # Force specific function
-                tool_choice = {"type": "function", "function": {"name": target_names[0]}}
+            if tools:
+                active_tools = [t for t in self.tools if t["function"]["name"] in tools]
             else:
-                # Force any function from the filtered list
-                tool_choice = "required"
+                active_tools = self.tools
 
+        # Manage memory history
+        if not memory:
+            messages = [{"role": "user", "content": prompt}]
+        else:
+            self._history.append({"role": "user", "content": prompt})
+            messages = self._history
+
+        # API Call is natively synchronous in the OpenAI library
         response = self.client.chat.completions.create(
             model=self.model_name,
-            messages=self.history,
-            tools=api_tools,
-            tool_choice=tool_choice,
+            messages=messages,
+            tools=active_tools if active_tools else None,
+            tool_choice="auto" if active_tools else None,
         )
 
-        print(response)
-        msg = response.choices[0].message
-
-        self.history.append(msg)
-
-        if response.usage:
-            self._usage = dict(response.usage)
+        # Parse Result
+        choice = response.choices[0]
+        content = choice.message.content or ""
 
         tool_calls = []
-        if msg.tool_calls:
-            for tc in msg.tool_calls:
+        if choice.message.tool_calls:
+            for tc in choice.message.tool_calls:
                 tool_calls.append(
-                    {
-                        "id": tc.id,
-                        "name": tc.function.name,  # Underscored name
-                        "args": json.loads(tc.function.arguments),
-                    }
+                    {"name": tc.function.name, "args": json.loads(tc.function.arguments)}
                 )
 
-        reasoning = getattr(msg, "reasoning_content", "")
-        return msg.content or "", reasoning, tool_calls
+        if memory:
+            self._history.append(choice.message)
 
-    @property
-    def token_usage(self):
-        return self._usage
+        usage = {}
+        if response.usage:
+            usage = {
+                "prompt_tokens": response.usage.prompt_tokens,
+                "completion_tokens": response.usage.completion_tokens,
+                "total_tokens": response.usage.total_tokens,
+            }
+
+        # Return the actual values immediately
+        return content, usage, tool_calls
