@@ -51,7 +51,6 @@ class GeminiBackend(LLMBackend):
         )
         return self.types.GenerateContentConfig(tools=[], tool_config=tool_config)
 
-    @property
     def some_tools_config(self, tools):
         tool_config = self.types.ToolConfig(
             function_calling_config=self.types.FunctionCallingConfig(

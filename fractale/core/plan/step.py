@@ -156,7 +156,14 @@ class Step:
 
     @property
     def rules(self):
-        return self.spec.get("rules")
+        """
+        Get rules, being careful to not return if we find the wrong type.
+        """
+        rules = self.spec.get("rules") or {}
+        if not isinstance(rules, dict):
+            print("Warning: rules are not a dictionary.")
+            return {}
+        return rules
 
     def match_rules(self, result):
         """
@@ -168,9 +175,12 @@ class Step:
         """
         for transition, rules in (self.rules or {}).items():
             for rule in rules:
-                if evaluate(rule, context=result):
-                    print(f"Matched Rule '{rule}' for transition '{transition}'")
-                    return transition
+                try:
+                    if evaluate(rule, context=result):
+                        print(f"Matched Rule '{rule}' for transition '{transition}'")
+                        return transition
+                except Exception as e:
+                    print(f"Warning: rule {rule} did not evaluate: {e}")
 
     @property
     def tools(self):
