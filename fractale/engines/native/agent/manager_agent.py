@@ -3,6 +3,7 @@ import json
 
 import fractale.core.result as results
 import fractale.utils as utils
+from fractale.core.plan.validate import StepsValidator
 from fractale.logger.logger import logger
 
 from .helper_agent import HelperAgent
@@ -50,9 +51,8 @@ class ManagerAgent(HelperAgent):
                     )
 
                     # First we need to validate the steps
-                    # TODO need to also validate outputs/inputs correct.
                     if is_ok == "yes":
-                        errors = self.validate_steps(result.data["steps"])
+                        errors = StepsValidator(result.data["steps"]).validate()
                         if errors:
                             prompt = f"Your plan needs work:\n{errors}"
                             continue
@@ -111,41 +111,6 @@ class ManagerAgent(HelperAgent):
             choices=choices,
             is_markdown=is_markdown,
         )
-
-    def validate_steps(self, steps):
-        """
-        Ensure that the agent does not request a tool or prompt that does not exist.
-        """
-        # valid names of steps
-        valid_names = set(x.get("name") for x in steps if x.get("name"))
-        errors = []
-        for i, step in enumerate(steps):
-
-            # Don't continue beyond here, we need the name
-            if "name" not in step:
-                errors.append(f"Step at index {i} is missing a 'name'")
-                continue
-
-            # Are the transitions valid?
-            step_name = step["name"]
-            for state, transition in step.get("transitions", {}).items():
-                if state not in ["success", "failure"]:
-                    errors.append(
-                        f"Step {step_name} has a transition name not in 'success' or 'failure' and is invalid."
-                    )
-                    if transition not in valid_names:
-                        errors.append(
-                            f"Transition for step {step_name} given '{state}' is not known. Known are: {valid_names}"
-                        )
-
-            if "prompt" in step:
-                if step["prompt"] not in self.prompt_map:
-                    errors.append(f"Agent requested prompt that does not exist: {step['prompt']}")
-            elif "tool" in step:
-                if step["tool"] not in self.tool_map:
-                    errors.append(f"Agent requested tool that does not exist: {step['tool']}")
-        if errors:
-            return "\n".join(errors)
 
     def set_step_maps(self, steps):
         """
