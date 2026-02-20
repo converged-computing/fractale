@@ -20,10 +20,9 @@ class Manager(StateMachineAgent):
     Standalone class (No inheritance from Agent).
     """
 
-    def __init__(self, plan, ui=None, max_attempts=None, backend="gemini", database=None):
+    def __init__(self, plan, ui=None, max_attempts=None, database=None):
         self.reset(plan)
         self.ui = ui or CLIAdapter()
-        self.backend = backend
         self.attempts = 0
         self.database = database
 
@@ -131,14 +130,12 @@ class Manager(StateMachineAgent):
         start_time = datetime.now()
 
         async def call():
-            async with self.mcp_client:
-                return await self.mcp_client.call_tool(step.tool, step.inputs)
+            tool_call = {"name": step.tool, "args": step.inputs}
+            return await self.call_tool(tool_call)
 
-        raw_result = utils.run_sync(call())
+        result = utils.run_sync(call())
         duration = (datetime.now() - start_time).total_seconds()
-        metrics = {"duration": duration, "tool": step.name}
-        result = parse_response(raw_result, metrics)
-        result.show()
+        result.metrics = {"duration": duration, "tool": step.name}
 
         # Case 1: We have explicit rules to update the step transition, and match
         transition = step.match_rules(result.data or result.content)

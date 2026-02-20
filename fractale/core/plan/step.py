@@ -48,7 +48,7 @@ class Step:
             if isinstance(v, str) and "{{" in v:
                 # Allow for reference of {{ steps.<name>.outputs|inputs.<name> }} || {{ self.outputs.<name> }}
                 try:
-                    resolved_user_inputs[k] = env.from_string(v).render({"steps": self.workflow})
+                    resolved_user_inputs[k] = env.from_string(v).render({"steps": workflow})
                 except Exception as e:
                     logger.warning(f"Jinja render failed for key '{k}': {e}")
                     resolved_user_inputs[k] = v

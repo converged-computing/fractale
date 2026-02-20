@@ -1,32 +1,29 @@
-import importlib
 import inspect
 import json
 import os
-import sys
-from typing import Callable, Dict, List
 
 from fastmcp import Client
 from fastmcp.client.transports import StreamableHttpTransport
-from mcp.types import Tool
+from rich.markdown import Markdown
 
-import fractale.core.registry as registry
 import fractale.core.result as results
 import fractale.utils as utils
 from fractale.core.config import ModelConfig
 from fractale.logger.logger import logger
 
+backend = None
+
 
 class AgentBase:
 
     def __init__(self):
-        # Maps tool names to callables (functions or class instances)
-        # and keep the tool definitions from discovery
-        self._local_registry: Dict[str, Callable] = {}
-        self._local_tool_definitions: List[Tool] = []
-
-        # This will be set in self.init()
-        self.mcp_client = None
+        self.tool_map = {}
+        self.prompt_map = {}
         self.reset()
+        self.init()
+        self.metadata = {"times": {}}
+        # Cache tools to call once. This assumes we won't change
+        self._tools = None
 
     def reset(self):
         """
@@ -49,10 +46,6 @@ class AgentBase:
         transport = StreamableHttpTransport(url=url, headers=headers)
         self.mcp_client = Client(transport)
 
-        # These are local tools, which can be classes (with __call__) or functions
-        # This allows us to add one-off sub-agents to the orchestrator
-        self._bind_local_tools(registry.LocalToolRegistry.get_tools())
-
     def ask(self, prompt, memory=False):
         """
         Simplified handy version of generate response without additional metadata.
@@ -60,66 +53,6 @@ class AgentBase:
         """
         response, _, _ = self.generate_response(prompt, use_tools=False, memory=memory, tools=None)
         return response
-
-    def _bind_local_tools(self, tools: List[Dict[str, str]]):
-        """
-        Import and instantiate local tools.
-        A path can point to a class or a function. If a class, we instantiate
-        pointing to "self" equivalent, and then expect a __call__.
-        """
-        for tool in tools:
-
-            # We require a path.
-            if "path" not in tool:
-                print("Warning: tool definition {tool} is missing a 'path' attribute.")
-                continue
-            path = tool["path"]
-
-            # E.g., fractale.agents.parsers.ResultParserAgent
-            try:
-                mod_path, obj_name = path.rsplit(".", 1)
-                module = importlib.import_module(mod_path)
-                obj = getattr(module, obj_name)
-            except Exception as e:
-                logger.error(f"Failed to load local tool '{path}': {e}")
-                continue
-
-            # Case 1: sub-agent class with __call__ and metadata attributes
-            if inspect.isclass(obj):
-                new_tool = self.load_class_tool(obj, obj_name)
-                logger.debug(f"Bound local sub-agent: {new_tool.name}")
-
-            # Case 2: standard function
-            else:
-                new_tool = self.load_function_tool(obj, obj_name)
-                logger.debug(f"Bound local tool: {new_tool.name}")
-
-            self._local_tool_definitions.append(new_tool)
-
-    def load_class_tool(self, cls, cls_name):
-        """
-        Load a class tool, providing the AgentBase here as self for the backend
-        """
-        instance = cls(backend=self)
-        name = getattr(instance, "name", cls_name.lower())
-        self._local_registry[name] = instance
-        return Tool(
-            name=name,
-            description=getattr(instance, "description", cls.__doc__ or ""),
-            inputSchema=getattr(instance, "input_schema", {"type": "object"}),
-        )
-
-    def load_function_tool(self, func):
-        """
-        Load a function tool, more standard/typical.
-        """
-        name = getattr(func, "name", func.__name__)
-        self._local_registry[name] = func
-        return Tool(
-            name=name,
-            description=func.__doc__ or "Local utility function",
-            inputSchema=getattr(func, "input_schema", {"type": "object"}),
-        )
 
     async def list_tools(self):
         """
@@ -132,34 +65,61 @@ class AgentBase:
                 tools = await self.mcp_client.list_tools()
                 tools = tools.tools if hasattr(tools, "tools") else tools  # Yo, dawg...
 
-        # Return the merged list of Tool objects
-        return list(tools) + self._local_tool_definitions
+        # Return the merged list of Tool objects, save to cache
+        self._tools = list(tools) + self.get_local_tools()
+        return self._tools
+
+    @property
+    def registry(self):
+        """
+        Convenience function to get live, local tool registry
+        """
+        from fractale.core.registry import tools
+
+        return tools
+
+    def get_local_tools(self):
+        """
+        Call on demand to get loaded registry tools.
+        The registry tools should be loaded once on init.
+        """
+        return self.registry.get_tools()
+
+    async def set_lookup_maps(self):
+        """
+        Set lookup maps, which include real MCP and locally registered tools.
+
+        We separate this from validation so the manager agent can load the definitions
+        without needing to validate against a plan.
+        """
+        async with self.mcp_client:
+            prompts = await self.mcp_client.list_prompts()
+            p_list = prompts.prompts if hasattr(prompts, "prompts") else prompts
+            self.prompt_map = {p.name: p.model_dump() for p in p_list}
+
+            all_tools = await self.list_tools()
+            self.tool_map = {t.name: t.model_dump() for t in all_tools}
 
     async def connect_and_validate(self):
         """
         Connect and validate the client with the plan for both prompts and tools.
         """
-        async with self.mcp_client:
-            prompts = await self.mcp_client.list_prompts()
-            p_list = prompts.prompts if hasattr(prompts, "prompts") else prompts
-            prompt_map = {p.name: p.model_dump() for p in p_list}
+        if not self.tool_map or not self.prompt_map:
+            await self.set_lookup_maps()
 
-            all_tools = await self.list_tools()
-            tool_map = {t.name: t.inputSchema for t in all_tools}
+        # Validate plan steps
+        for step in self.plan.states.values():
+            if step.type == "agent":
+                if step.prompt and step.prompt in self.prompt_map:
+                    step.set_schema(self.prompt_map[step.prompt])
+                else:
+                    logger.warning(f"⚠️ Prompt '{step.prompt}' not found on server.")
 
-            # Validate plan steps
-            for step in self.plan.states.values():
-                if step.type == "agent":
-                    if step.prompt and step.prompt in prompt_map:
-                        step.set_schema(prompt_map[step.prompt])
-                    else:
-                        logger.warning(f"⚠️ Prompt '{step.prompt}' not found on server.")
-
-                elif step.type == "tool":
-                    if step.tool in tool_map:
-                        step.set_schema(tool_map[step.tool])
-                    else:
-                        logger.warning(f"⚠️ Tool '{step.tool}' not found in registry.")
+            elif step.type == "tool":
+                if step.tool in self.tool_map:
+                    step.set_schema(self.tool_map[step.tool])
+                else:
+                    logger.warning(f"⚠️ Tool '{step.tool}' not found in registry.")
 
     async def call_tool(self, call, metrics=None):
         """
@@ -167,19 +127,19 @@ class AgentBase:
         """
         result = None
         name = call["name"]
-        args = json.dumps(call.get("args") or {})
 
-        if args:
-            logger.panel(args, title=f"🛠️  Calling: {name}", color="cyan", truncate=800)
+        if call["args"]:
+            args = json.dumps(call.get("args", {}))
+            logger.code_panel(args, title=f"🛠️  Calling: {name}", color="cyan", language="json")
         else:
             logger.info(f"🛠️  Calling: {name}")
 
         # Check local registry (functions or classes with __call__) or fallback to MCP server
-        if name in self._local_registry:
-            result = await self.call_local_tool(name, args)
+        if self.registry.has(name):
+            result = await self.call_local_tool(name, call["args"])
         else:
             async with self.mcp_client:
-                result = await self.mcp_client.call_tool(name, args)
+                result = await self.mcp_client.call_tool(name, call["args"])
 
         result = results.parse_response(result, metrics)
         result.show()
@@ -190,20 +150,25 @@ class AgentBase:
         Call a local tool from the registry
         """
         # This is either an instantiated class or function
-        executable = self._local_registry[name]
+        executable = self.registry.get(name)
 
         # Check if it's a coroutine or an object with an async __call__
         if inspect.iscoroutinefunction(executable) or utils.is_callable(executable):
             return await executable(**args)
         return executable(**args)
 
-    def init_backend(self):
-        """
-        Create the backend from the model config.
-        """
-        import fractale.agents.backends as backends
 
-        cfg = ModelConfig.from_environment()
-        if cfg.provider not in backends.BACKENDS:
-            raise ValueError(f"Provider '{cfg.provider}' not supported.")
-        self.backend = backends.BACKENDS[cfg.provider](config=cfg)
+def init_backend():
+    """
+    Yes, global variables are bad practice. But it's a lazy man's way to share a common backend instance.
+
+    # TODO this should be extended to be more of a manager. E.g., if we want more than one backend, we would
+    create them here once, and then deliver (import) as needed during execution.
+    """
+    global backend
+    import fractale.agents.backends as backends
+
+    cfg = ModelConfig.from_environment()
+    if cfg.provider not in backends.BACKENDS:
+        raise ValueError(f"Provider '{cfg.provider}' not supported.")
+    backend = backends.BACKENDS[cfg.provider](config=cfg)

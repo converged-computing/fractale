@@ -103,6 +103,8 @@ class WorkerAgent(StateMachineAgent):
         """
         We need to return on some state of success or ultimate failure.
         """
+        from fractale.agents.base import backend
+
         loops = 0
         result = None
 
@@ -117,7 +119,7 @@ class WorkerAgent(StateMachineAgent):
             self.show_instruction(instruction)
 
             # This is making an agentic call, with or without tools
-            response, metrics, calls = self.backend.generate_response(
+            response, metrics, calls = backend.generate_response(
                 prompt=instruction,
                 use_tools=use_tools,
                 tools=self.step.tools,

@@ -28,11 +28,8 @@ class StateMachineAgent(AgentBase):
         run -> run_loop (prompt) -> process_loop (inner loop)
         """
         start_time = time.time()
+        show_result = kwargs.get("show_result", True)
         self.metadata["status"] = "running"
-
-        # Setup fastmcp client and choose a backend (before async)
-        self.init()
-        self.init_backend()
 
         try:
             result = asyncio.run(self.run_loop(*args, **kwargs))
@@ -45,5 +42,6 @@ class StateMachineAgent(AgentBase):
         finally:
             self.metadata["times"]["execution"] = time.time() - start_time
 
-        result.show(truncate=self.agent_result_truncate)
+        if show_result:
+            result.show(truncate=self.agent_result_truncate)
         return result
