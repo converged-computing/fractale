@@ -1,20 +1,25 @@
 import asyncio
-import json
 import time
 
-import fractale.engines.native.backends as backends
-import fractale.engines.native.result as results
-from fractale.core.config import ModelConfig
-from fractale.engines.base import AgentBase
-from fractale.logger.logger import logger
+import fractale.core.result as results
+from fractale.agents import AgentBase
 
 
-class AgentBase(AgentBase):
+class StateMachineAgent(AgentBase):
     """
-    State machine agent base
+    A state machine agent base is an agent with a run function intended
+    for a state machine.
     """
 
     agent_result_truncate = 800
+
+    def reset(self, plan=None):
+        """
+        Reset the agent. Be careful if your model client is saving state here.
+        """
+        self.metadata = {"status": "pending", "times": {}, "steps": []}
+        if plan is not None:
+            self.plan = plan
 
     def run(self, *args, **kwargs):
         """
@@ -42,28 +47,3 @@ class AgentBase(AgentBase):
 
         result.show(truncate=self.agent_result_truncate)
         return result
-
-    async def call_tool(self, call, metrics=None):
-        """
-        Call a tool, requested from an agent.
-        Return a parsed result.
-        """
-        result = None
-        if call["args"]:
-            args = json.dumps(call["args"])
-            logger.panel(args, title=f"🛠️  Calling: {call['name']}", color="cyan", truncate=800)
-        else:
-            logger.info(f"🛠️  Calling: {call['name']}")
-            result = await self.client.call_tool(call["name"], call["args"])
-            result = results.parse_response(result, metrics)
-            result.show()
-        return result
-
-    def init_backend(self):
-        """
-        Create the backend from the model config.
-        """
-        cfg = ModelConfig.from_environment()
-        if cfg.provider not in backends.BACKENDS:
-            raise ValueError(f"Provider '{cfg.provider}' not supported.")
-        self.backend = backends.BACKENDS[cfg.provider](config=cfg)

@@ -1,16 +1,14 @@
 import asyncio
 import json
-import logging
 import os
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from openai import OpenAI
 
 from fractale.core.config import ModelConfig
-from fractale.logger.logger import logger
 
-from .base import LLMBackend
+from .backend import LLMBackend
 
 default_model = "gpt-5-mini"
 
