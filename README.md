@@ -63,6 +63,7 @@ pip install flux-mcp hpc-mcp IPython --break-system-packages
 flux start
 ```
 
+
 #### Joke Example
 
 Let's ask Gemini to tell us a joke. In one terminal:
@@ -72,9 +73,23 @@ Let's ask Gemini to tell us a joke. In one terminal:
 mcpserver start --config ./examples/servers/run-job.yaml
 ```
 
-
 ```bash
 fractale prompt Tell me a joke, and give me choices about the category.
+```
+
+#### Result Parser
+
+Let's do an example where we add a one-off, on the fly tool, which is like a local registry. We can start an mcpserver in one terminal:
+
+
+```bash
+mcpserver start --config ./examples/servers/run-job.yaml
+```
+
+And then run fractale with our local tool defined (`-r` means registry to add):
+
+```bash
+fractale prompt -r ./examples/registry/parser-agents.yaml Write me a flux job that tells a joke, and then ask the result parser tool to derive a regular expression for the punchline.
 ```
 
 #### Flux JobSpec Translation
