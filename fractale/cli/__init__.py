@@ -82,6 +82,7 @@ def get_parser():
             "--engine", choices=["native", "langchain", "autogen"], default="native"
         )
         command.add_argument("--backend", choices=["openai", "gemini", "llama"], default="gemini")
+        command.add_argument("-r", "--registry", action="append", default=None)
         command.add_argument(
             "--database", help="URI for result storage (file://path or sqlite://path)"
         )

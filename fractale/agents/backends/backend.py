@@ -9,9 +9,13 @@ class LLMBackend(AgentBase, ABC):
     """
 
     def __init__(self):
-        # Init mcp client
+        super().__init__()
         self.init()
 
+    def reset(self):
+        """
+        Reset different chat agents (with mnemory)
+        """
         # Chat is init for cases when we want to use memory
         self._chat_all_tools = None
         self._chat_no_tools = None

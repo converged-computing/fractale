@@ -33,7 +33,7 @@ class HelperAgent(StateMachineAgent):
     def __init__(self, name: str, ui=None):
         self.name = name
         self.ui = ui or CLIAdapter()
-        self.reset()
+        super().__init__()
         self.init()
         self.init_backend()
 

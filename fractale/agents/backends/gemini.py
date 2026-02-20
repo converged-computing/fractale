@@ -35,11 +35,6 @@ class GeminiBackend(LLMBackend):
         if not self.tools:
             self.tools = asyncio.run(self.list_tools())
 
-    async def list_tools(self):
-        async with self.mcp_client:
-            tools = await self.mcp_client.list_tools()
-            return tools
-
     # Configs with different levels of tool allowances
     @property
     def all_tools_config(self):

@@ -21,17 +21,18 @@ class Manager(StateMachineAgent):
     """
 
     def __init__(self, plan, ui=None, max_attempts=None, backend="gemini", database=None):
-        self.plan = plan
+        self.reset(plan)
         self.ui = ui or CLIAdapter()
         self.backend = backend
         self.attempts = 0
         self.database = database
-        self.metadata = {"status": "Pending"}
-        self.init()
+
         # Cache for persistent agents
         self.agent_cache = {}
         self.agent = HelperAgent(name="state-machine-helper", ui=self.ui)
         self._max_attempts = max_attempts
+        super().__init__()
+        self.init()
 
     @property
     def max_attempts(self):
@@ -49,8 +50,6 @@ class Manager(StateMachineAgent):
         # Setup State Machine Engine
         # The manager here creates a state machine
         # The state machine is given callbacks for running an agent or tool, defined here.
-        # TODO: if we add plan: update_plan here, we can have plan updates run during workflow
-        # I am not doing this now because I do not think it should be interactive.
         sm = WorkflowStateMachine(
             states=self.plan.states,
             callbacks={"agent": self.run_agent, "tool": self.run_tool},
