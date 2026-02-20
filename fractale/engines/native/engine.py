@@ -1,20 +1,19 @@
 import asyncio
 import json
-import os
 from datetime import datetime
 
 import fractale.utils as utils
+from fractale.core.result import parse_response
 from fractale.engines.native.agent import HelperAgent
-from fractale.engines.native.result import parse_response
 from fractale.logger import logger
 from fractale.tools.calls import check_tool_call
 from fractale.ui.adapters.cli import CLIAdapter
 
-from .agent import AgentBase, WorkerAgent
+from .agent import StateMachineAgent, WorkerAgent
 from .state_machine import WorkflowStateMachine
 
 
-class Manager(AgentBase):
+class Manager(StateMachineAgent):
     """
     The Native Engine Orchestrator.
     Executes the Plan using a local Finite State Machine.
@@ -133,8 +132,8 @@ class Manager(AgentBase):
         start_time = datetime.now()
 
         async def call():
-            async with self.client:
-                return await self.client.call_tool(step.tool, step.inputs)
+            async with self.mcp_client:
+                return await self.mcp_client.call_tool(step.tool, step.inputs)
 
         raw_result = utils.run_sync(call())
         duration = (datetime.now() - start_time).total_seconds()

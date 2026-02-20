@@ -2,12 +2,6 @@ tools:
   # Name based on flux so the agent sees it is flux-specific
   - path: flux_mcp.validate.flux_validate_batch_jobspec
     name: validate_flux_jobspec
-  # This likely only works with canonicdal
-  # - path: flux_mcp.validate.flux_count_jobspec_resources
-  #  name: flux_count_jobspec_resources
-  # Important: this is a manual translation (we aren't currently using)
-  # - path: flux_mcp.transformer.transform_jobspec
-  #  name: transform_jobspec
 
 prompts:
   - path: fractale.tools.validate.validate_jobspec_expert

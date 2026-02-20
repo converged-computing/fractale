@@ -15,8 +15,9 @@ We create a robust and asynchronous server that can register and load tools of i
 
 The library here has the following abstractions.
 
-- **Plan** is the YAML manifest that any agent can read and deploy.
-- **Engine**: The orchestration engine (native state machine) that instantiates agents.
+- **Plan** is the YAML manifest that any agent can read and deploy. ([fractale/core/plan](fractale/core/plan))
+- **Engine**: The orchestration engine (native state machine) that instantiates agents ([fractale/engines/native](fractale/engines/native))
+- **Agents**: are independent units of a state machine, a sub- or helper- agent that can be run under a primary orchestrating (state machine) agent. Optional agents that are exposed to the LLM as possible steps are under ([fractale/agents](fractale/agents)), and agents that are essential to the top level orchestration are part of [fractale/engines/native/agent](fractale/engines/native/agent).
 
 ### Environment
 
@@ -31,6 +32,7 @@ The following variables can be set in the environment.
 | `OPENAI_BASE_URL` | Base url for OpenAI | unset |
 
 Note that for provider, you can also designate on the command line. The default is Gemini (`gemini`). To change:
+
 
 ```bash
 fractale agent --backend openai ./examples/plans/transform-retry.yaml
@@ -51,15 +53,31 @@ Let's install [mcp-server](https://github.com/converged-computing/mcp-server) to
 pip install --break-system-packages git+https://github.com/converged-computing/mcp-server.git#egg=mcp-serve
 ```
 
-#### Flux JobSpec Translation
+#### Dependencies
 
 To prototype with Flux, open the code in the devcontainer. Install the library and start a flux instance.
 
 ```bash
 pip install -e .[all] --break-system-packages
-pip install flux-mcp IPython --break-system-packages
+pip install flux-mcp hpc-mcp IPython --break-system-packages
 flux start
 ```
+
+#### Joke Example
+
+Let's ask Gemini to tell us a joke. In one terminal:
+
+
+```bash
+mcpserver start --config ./examples/servers/run-job.yaml
+```
+
+
+```bash
+fractale prompt Tell me a joke, and give me choices about the category.
+```
+
+#### Flux JobSpec Translation
 
 We will need to start the server and add the validation functions and prompt. Start the server with the functions and prompt we need:
 
@@ -80,7 +98,6 @@ And then:
 ```bash
 fractale agent ./examples/plans/transform-retry.yaml
 ```
-
 
 ### Docker Build
 

@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Tuple
 
 from fractale.core.config import ModelConfig
 
-from .base import LLMBackend
+from .backend import LLMBackend
 
 default_model = "gemini-2.5-pro"
 
@@ -13,7 +13,7 @@ class GeminiBackend(LLMBackend):
     def __init__(self, config: ModelConfig = None, tools=None):
         """
         export GEMINI_API_KEY=xxxx
-        from fractale.engines.native.backends.gemini import GeminiBackend
+        from fractale.agents.backends.gemini import GeminiBackend
         backend = GeminiBackend()
         """
         super().__init__()
@@ -37,7 +37,8 @@ class GeminiBackend(LLMBackend):
 
     async def list_tools(self):
         async with self.mcp_client:
-            return await self.mcp_client.list_tools()
+            tools = await self.mcp_client.list_tools()
+            return tools
 
     # Configs with different levels of tool allowances
     @property
