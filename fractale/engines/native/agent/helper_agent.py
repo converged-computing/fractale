@@ -34,14 +34,14 @@ class HelperAgent(StateMachineAgent):
         self.name = name
         self.ui = ui or CLIAdapter()
         super().__init__()
-        self.init()
-        self.init_backend()
 
     def ask(self, prompt, use_tools=True, memory=True):
         """
         Ask the agent a question (assume we want memory)
         """
-        response, metrics, calls = self.backend.generate_response(
+        from fractale.agents.base import backend
+
+        response, metrics, calls = backend.generate_response(
             prompt, use_tools=use_tools, memory=memory
         )
         return HelperAgentResponse(response, metrics, calls)

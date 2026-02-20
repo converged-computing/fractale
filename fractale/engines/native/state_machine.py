@@ -108,7 +108,9 @@ class WorkflowStateMachine:
         """
         Run the planner. An interactive process to design steps and a plan.
         """
-        result = self.planner.run(plan_step)
+        # The result here is the steps (plan) and we show a shortened version
+        # The longer version here has the complete schemas
+        result = self.planner.run(plan_step, show_result=False)
         for i, step_data in enumerate(result.data["steps"]):
             step = Step(step_data)
             # Add the workflow reference to it

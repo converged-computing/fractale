@@ -10,6 +10,8 @@ from rich.traceback import install
 install()
 
 import fractale
+import fractale.agents as agents
+import fractale.core.registry as registry
 from fractale.logger import setup_logger
 
 
@@ -114,6 +116,13 @@ def run_fractale():
 
     # If an error occurs while parsing the arguments, the interpreter will exit with value 2
     args, extra = parser.parse_known_args()
+
+    # Config discovers from environment
+    os.environ["FRACTALE_LLM_PROVIDER"] = args.backend
+
+    # Extra tools, resources, prompts, (capabilities) etc.
+    registry.init_registry(args.registry or [])
+    agents.init_backend()
 
     if args.debug is True:
         os.environ["MESSAGELEVEL"] = "DEBUG"
