@@ -1,3 +1,4 @@
+import inspect
 import re
 from typing import List, Optional
 
@@ -5,6 +6,13 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.prompt import Prompt
+
+
+def is_callable(executable):
+    """
+    Determine if an executable (class) is callable.
+    """
+    return hasattr(executable, "__call__") and inspect.iscoroutinefunction(executable.__call__)
 
 
 def get_user_validation(
