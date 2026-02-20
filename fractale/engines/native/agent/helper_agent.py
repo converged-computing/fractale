@@ -2,11 +2,9 @@
 from dataclasses import dataclass
 from typing import List, Optional
 
-import fractale.engines.native.backends as backends
-from fractale.core.config import ModelConfig
 from fractale.ui.adapters.cli import CLIAdapter
 
-from .base_agent import AgentBase
+from .base_agent import StateMachineAgent
 
 
 @dataclass
@@ -27,7 +25,7 @@ GOAL: Debug the error, summarize it, and provide advise for fixing it.
 """
 
 
-class HelperAgent(AgentBase):
+class HelperAgent(StateMachineAgent):
     """
     A simplified agent to make calls to a model.
     """

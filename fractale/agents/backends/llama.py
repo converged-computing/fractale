@@ -2,10 +2,11 @@ import json
 import os
 from typing import Any, Dict, List, Tuple
 
-import fractale.engines.native.prompts as prompts
 from fractale.core.config import ModelConfig
 
-from .base import LLMBackend
+from .backend import LLMBackend
+
+# IMPORTANT: this file is not currently used/functioning. It needs to be written.
 
 
 class LlamaBackend(LLMBackend):
@@ -61,13 +62,6 @@ class LlamaBackend(LLMBackend):
         # TODO: Implement one_off support
 
         if prompt:
-            if not self.history:
-                self.history.append(
-                    {
-                        "role": "system",
-                        "content": prompts.with_tools if use_tools else prompts.without_tools,
-                    }
-                )
             self.history.append({"role": "user", "content": prompt})
 
         if tool_outputs and use_tools and not self.disable_history:

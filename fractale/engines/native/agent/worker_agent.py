@@ -2,16 +2,16 @@ import json
 
 from rich import print
 
-import fractale.engines.native.result as results
+import fractale.core.result as results
 import fractale.utils as utils
 from fractale.logger.logger import logger
 from fractale.tools.calls import check_call_results
 
-from .base_agent import AgentBase
+from .base_agent import StateMachineAgent
 from .helper_agent import DebugAgent
 
 
-class WorkerAgent(AgentBase):
+class WorkerAgent(StateMachineAgent):
     """
     A standalone worker for the Native Engine.
     Executes a single step using FastMCP + LLM Backend.
@@ -26,7 +26,7 @@ class WorkerAgent(AgentBase):
         self.step = step
         self.ui = ui
         self.max_attempts = max_attempts or 5
-        self.client = None
+        self.mcp_client = None
         self.metadata = {
             "name": name,
             "status": "pending",
@@ -41,7 +41,7 @@ class WorkerAgent(AgentBase):
         Sets up connections and runs the async loop.
         """
 
-        async with self.client:
+        async with self.mcp_client:
 
             # Two options here:
             # 1. Derive the persona (prompt) from mcp server.
@@ -73,7 +73,7 @@ class WorkerAgent(AgentBase):
         self.ui.log(f"📥 Persona: {prompt}")
 
         try:
-            result = await self.client.get_prompt(name=prompt, arguments=arguments)
+            result = await self.mcp_client.get_prompt(name=prompt, arguments=arguments)
             msgs = []
             for msg in result.messages:
                 # Assume a prompt server returns a single prompt message
