@@ -51,11 +51,14 @@ def get_user_validation(
 
     # Prompt for the specific semantic choices
     # We use y/n/f as short keys for speed
-    choice = Prompt.ask(
-        "[bold yellow]Confirm ([green]y[/green]es/[red]n[/red]o) or provide ([cyan]f[/cyan])eedback[/bold yellow]",
-        choices=choices,
-        default=default,
-    ).lower()
+    choice = None
+    while not choice and choice not in choices:
+        choice = Prompt.ask(
+            "Confirm ([green]yes[/green]/[red]no[/red]) or provide ([cyan]feedback[/cyan])",
+            choices=choices,
+            default=default,
+        )
+    choice = choice.lower()
 
     # Handle "Yes"
     if choice in ["y", "yes"]:
@@ -77,7 +80,7 @@ def get_user_validation(
         return feedback_answer.strip()
 
     # Fallback recursive safety
-    return get_user_validation(message, options, default)
+    return get_user_validation(message, options, default, choices=choices)
 
 
 def get_user_input(

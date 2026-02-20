@@ -1,6 +1,5 @@
 from rich import print
 
-import fractale.core.registry as registry
 from fractale.db import get_database
 
 
@@ -14,9 +13,6 @@ def run_fractale(engine, args):
         database.connect()
 
     result = None
-
-    # Extra tools, resources, prompts, (capabilities) etc.
-    registry.LocalToolRegistry.load_registries(args.registry or [])
 
     # Select interaction mode and attach UI
     try:

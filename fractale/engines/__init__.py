@@ -16,12 +16,9 @@ def get_engine(
     if plan is not None:
         plan = Plan(plan)
 
-    # Config discovers from environment
-    os.environ["FRACTALE_LLM_PROVIDER"] = backend
-
     # State machine orchestration
     if engine == "native":
         from fractale.engines.native.engine import Manager
     else:
         raise ValueError(f"Engine {engine} is not recognized.")
-    return Manager(plan=plan, backend=backend, ui=ui, max_attempts=max_attempts, database=database)
+    return Manager(plan=plan, ui=ui, max_attempts=max_attempts, database=database)

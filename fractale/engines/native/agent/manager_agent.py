@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 import fractale.core.result as results
 import fractale.utils as utils
@@ -22,11 +23,6 @@ class ManagerAgent(HelperAgent):
 
     agent_result_truncate = 1000
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.prompt_map = {}
-        self.tool_map = {}
-
     async def run_loop(self, step, **kwargs):
         """
         Perform the debug task and return a Helper agent response
@@ -38,21 +34,24 @@ class ManagerAgent(HelperAgent):
         logger.panel(step.instruction, title="Agent Request", color="green")
 
         while True:
-            # 1. Await the agent response so the loop can process other tasks
             result = self.ask(prompt, use_tools=True, memory=True)
 
             if not result.calls:
                 result = results.parse_response(result.content, result.metrics)
+
                 # We need to make sure we have steps, and they are not empty
                 if result.data and "steps" in result.data and result.data["steps"]:
-                    # Check with user that steps are ok (only yes or feedback)
-                    is_ok = await self.ask_validate_user(
-                        f"Is this plan OK?\n```python\n{result.data['steps']}\n```\n",
-                        choices=["y", "yes", "feedback", "f"],
-                    )
-                    if is_ok == "yes":
 
-                        # First we need to validate the steps
+                    # Check with user that steps are ok (only yes or feedback)
+                    preview = json.dumps(result.data["steps"], indent=4)
+                    is_ok = await self.ask_validate_user(
+                        f"Is this plan OK?\n```json\n{preview}\n```\n",
+                        choices=["yes", "y", "feedback", "f"],
+                    )
+
+                    # First we need to validate the steps
+                    # TODO need to also validate outputs/inputs correct.
+                    if is_ok == "yes":
                         errors = self.validate_steps(result.data["steps"])
                         if errors:
                             prompt = f"Your plan needs work:\n{errors}"
@@ -117,8 +116,28 @@ class ManagerAgent(HelperAgent):
         """
         Ensure that the agent does not request a tool or prompt that does not exist.
         """
+        # valid names of steps
+        valid_names = set(x.get("name") for x in steps if x.get("name"))
         errors = []
-        for step in steps:
+        for i, step in enumerate(steps):
+
+            # Don't continue beyond here, we need the name
+            if "name" not in step:
+                errors.append(f"Step at index {i} is missing a 'name'")
+                continue
+
+            # Are the transitions valid?
+            step_name = step["name"]
+            for state, transition in step.get("transitions", {}).items():
+                if state not in ["success", "failure"]:
+                    errors.append(
+                        f"Step {step_name} has a transition name not in 'success' or 'failure' and is invalid."
+                    )
+                    if transition not in valid_names:
+                        errors.append(
+                            f"Transition for step {step_name} given '{state}' is not known. Known are: {valid_names}"
+                        )
+
             if "prompt" in step:
                 if step["prompt"] not in self.prompt_map:
                     errors.append(f"Agent requested prompt that does not exist: {step['prompt']}")
@@ -143,19 +162,3 @@ class ManagerAgent(HelperAgent):
                 step["type"] = "tool"
                 new_steps.append(step)
         return new_steps
-
-    async def set_lookup_maps(self):
-        """
-        Get lookup maps for tool and prompt schemas for steps
-
-        Important: this assumes a server with calls that do not change. If the functions
-        will change, this needs to be called on demand.
-        """
-        async with self.mcp_client:
-            prompts = await self.mcp_client.list_prompts()
-            p_list = prompts.prompts if hasattr(prompts, "prompts") else prompts
-            self.prompt_map = {p.name: p.model_dump() for p in p_list}
-
-            tools = await self.mcp_client.list_tools()
-            t_list = tools.tools if hasattr(tools, "tools") else tools
-            self.tool_map = {t.name: t.model_dump() for t in t_list}
