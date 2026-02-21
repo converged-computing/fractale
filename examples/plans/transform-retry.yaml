@@ -43,7 +43,7 @@ steps:
 
     # This gets jobspec from the function call output above.
     inputs:
-      script: "{{transform_result.jobspec}}"
+      script: "{{steps.transform.outputs.jobspec}}"
 
     # If we succeed, proceed to manual validation
     transitions:
@@ -54,7 +54,7 @@ steps:
     type: tool
     tool: validate_flux_jobspec
     inputs:
-      content: "{{transform_result.jobspec}}"
+      content: "{{steps.transform.outputs.jobspec}}"
 
     # If we fail, go back to transform and add error
     # We succeed when valid in the return data structure is True

@@ -5,16 +5,14 @@ def get_transform_text(
     Get prompt text for an initial build.
     """
     # Derive the goal for the agent. When we provide an error, it changes to a debugging agent.
-    goal = f"""I need to convert the provided job specification from '{from_manager}' to '{to_manager}'.
-The desired output format is a '{fmt}' script."""
+    goal = f"I need to convert the provided job specification from '{from_manager}' to '{to_manager}'. The desired output format is a '{fmt}' script."
     if error is not None:
-        goal = f"""You previously attempted to convert a job specification and it did not validate. Analyze the error and fix it:
-Error: {error}"""
-        if previous is not None:
-            goal += f"Previous Attempt: \n{previous}"
+        goal = f"You previously attempted to convert a job specification and it did not validate. Analyze the error and fix it: Error: {error}"
 
-    return f"""
-### PERSONA
+    if previous is not None:
+        goal += f"Previous Attempt: \n{previous}"
+
+    return f"""### PERSONA
 You are a job specification generation expert.
 
 ### CONTEXT
@@ -44,7 +42,7 @@ def transform_jobspec_expert(
     fmt: str = "batch",
     error: str = None,
     jobspec: str = None,
-):
+) -> str:
     """
     Generate a prompt to transform FROM a particular workload manager TO a particular workload manager.
     A fmt should be the jobspec format, where jobspec is the refererring to the Flux canonical JSON/YAML
@@ -58,7 +56,6 @@ def transform_jobspec_expert(
       error (str): if a previous attempt was made, include the error message.
       jobspec (str): if a previous attempt was made with error, jobspec for inspection.
     """
-    prompt_text = get_transform_text(
+    return get_transform_text(
         script, to_manager, from_manager, fmt=fmt, error=error, previous=jobspec
     )
-    return {"messages": [{"role": "user", "content": {"type": "text", "text": prompt_text}}]}

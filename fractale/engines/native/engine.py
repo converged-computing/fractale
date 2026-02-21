@@ -112,6 +112,9 @@ class Manager(StateMachineAgent):
 
         # The worker agent will work on successfully executing a step
         agent = None
+
+        # TODO: this could be a way to persist an agent state.
+        # Not currently being used.
         if persist:
             agent = self.agent_cache.get(step.name)
         if agent is None:

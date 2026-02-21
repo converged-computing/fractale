@@ -21,20 +21,15 @@ def run_fractale(engine, args):
 
             # The App takes ownership of the Engine.
             # It will instantiate TextualAdapter and assign it to engine.ui
-            app = FractaleApp(engine)
-            result = app.run()
+            engine = FractaleApp(engine)
 
         elif args.mode == "web":
             from fractale.ui.adapters.web import WebAdapter
 
             engine.ui = WebAdapter(url="http://localhost:3000")
-            result = engine.run()
 
-        else:
-            from fractale.ui.adapters.cli import CLIAdapter
-
-            engine.ui = CLIAdapter()
-            result = engine.run()
+        # Run the engine
+        result = engine.run()
 
     # Clean up or close database if relevant
     finally:
