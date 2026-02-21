@@ -35,6 +35,8 @@ class LocalToolRegistry:
         tools:
           - path: module.path.Tool
         """
+        if not registry_paths:
+            return
         tools = []
         for path in registry_paths or []:
             if not os.path.exists(path):
@@ -45,8 +47,8 @@ class LocalToolRegistry:
                 tools.extend(new_tools)
 
         # Bind newly loaded tools
-        logger.info(f"Loaded {len(tools)} tool(s) from {path}")
-        self.bind(new_tools)
+        logger.info(f"Loaded {len(tools)} tool(s) from {registry_paths}")
+        self.bind(tools)
 
     def bind(self, tools: List[Dict[str, str]]):
         """

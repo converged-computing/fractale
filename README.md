@@ -63,6 +63,11 @@ pip install flux-mcp hpc-mcp IPython --break-system-packages
 flux start
 ```
 
+Note that this needs to be run in an environment with Flux. I run both in the DevContainer. In a different terminal, export the same `FLUX_URI` from where your server is running. Ensure your credentials are exported.
+
+```bash
+export GEMINI_API_TOKEN=xxxxxxxxxx
+```
 
 #### Joke Example
 
@@ -98,14 +103,6 @@ We will need to start the server and add the validation functions and prompt. St
 
 ```bash
 mcpserver start --config ./examples/servers/flux-gemini.yaml
-```
-
-**State Machine**
-
-Note that this needs to be run in an environment with Flux. I run both in the DevContainer. In a different terminal, export the same `FLUX_URI` from where your server is running. Ensure your credentials are exported.
-
-```bash
-export GEMINI_API_TOKEN=xxxxxxxxxx
 ```
 
 And then:

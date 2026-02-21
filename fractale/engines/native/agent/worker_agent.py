@@ -26,7 +26,6 @@ class WorkerAgent(StateMachineAgent):
         self.step = step
         self.ui = ui
         self.max_attempts = max_attempts or 5
-        self.mcp_client = None
         self.metadata = {
             "name": name,
             "status": "pending",
@@ -35,6 +34,7 @@ class WorkerAgent(StateMachineAgent):
         }
         # Debug Agent
         self.debug_agent = DebugAgent(name="debug-agent", ui=self.ui)
+        self.init()
 
     async def run_loop(self, *args, **kwargs):
         """
@@ -70,16 +70,23 @@ class WorkerAgent(StateMachineAgent):
 
         This sets the personality of the agent.
         """
-        self.ui.log(f"📥 Persona: {prompt}")
+        self.ui.log(f"📥 Persona: {prompt}, args {arguments}")
 
         try:
             result = await self.mcp_client.get_prompt(name=prompt, arguments=arguments)
             msgs = []
             for msg in result.messages:
-                # Assume a prompt server returns a single prompt message
-                msgs.append(json.loads(msg.content.text)["messages"][0]["content"]["text"].strip())
+                text = msg.content.text
+                # Assume a prompt server returns a single prompt message OR text
+                try:
+                    text = json.loads(text)
+                    if isinstance(text, dict) and "messages" in text:
+                        text = text["messages"][0]["content"]["text"].strip()
+                except:
+                    msgs.append(text)
 
-            return "".join(msgs) + (self.step.spec.get("instruction") or "")
+            instruction = self.step.spec.get("instruction") or ""
+            return "".join(msgs) + instruction
         except Exception as e:
             raise RuntimeError(f"Failed to fetch persona '{prompt}': {e}")
 
@@ -111,9 +118,13 @@ class WorkerAgent(StateMachineAgent):
         # Are we allowed to use tools?
         has_tools = self.step.tool or self.step.tools
         use_tools = self.step.allow_tools or has_tools
+        if has_tools:
+            print(f"  has_tools: {has_tools}")
+        if use_tools:
+            print(f"  use_tools: {use_tools}")
 
         # Each step internally can go up to some max tries
-        while loops < self.step.max_attempts:
+        while loops < (self.step.max_attempts or 10):
             # Start counting at 1. Like Matlab
             loops += 1
             self.show_instruction(instruction)

@@ -1,14 +1,11 @@
 from typing import Annotated
 
+from fastmcp.prompts import Message
+
 # We are hosting tools here that deviate a lot from a standard validation request.
 
 
-def get_jobspec_validation_text(script):
-    """
-    Get prompt text for an initial build.
-    """
-    return f"""
-### PERSONA
+validate_prompt = """### PERSONA
 You are a job validation expert.
 
 ### CONTEXT
@@ -18,7 +15,7 @@ We need to validate a job specification for correctness.
 I need to validate if the following job specification is correct:
 
 ```
-{script}
+%s
 ```
 
 ### REQUIREMENTS & CONSTRAINTS
@@ -35,9 +32,8 @@ You MUST return a JSON structure with fields for 'valid' (bool) and a list of st
 """
 
 
-def validate_jobspec_expert(script: Annotated[str, "Batch script or job specification"]):
+def validate_jobspec_expert(script: Annotated[str, "Batch script or job specification"]) -> str:
     """
     Get a prompt to encourage validation of a job specification.
     """
-    prompt_text = get_jobspec_validation_text(script)
-    return {"messages": [{"role": "user", "content": {"type": "text", "text": prompt_text}}]}
+    return validate_prompt % script

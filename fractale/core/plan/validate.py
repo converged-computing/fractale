@@ -99,7 +99,17 @@ class StepsValidator:
                 continue
             for match in jinja_pattern.finditer(value):
                 found_step = match.group("step_name")
-                found_value = match.group("output_key").strip()
+                raw_output_expression = match.group("output_key").strip()
+
+                # The agent sometimes adds Python method syntax: e.g., lines.join('\n')
+                if "(" in raw_output_expression or ")" in raw_output_expression:
+                    errors.append(
+                        f"Step '{step_name}': Input '{key}' uses invalid Python method syntax: '{raw_output_expression}'. "
+                        f"Use Jinja2 filters (e.g., '| join') instead of methods (e.g., '.join()')."
+                    )
+
+                # Extract base key for schema validation (e.g., 'lines' from 'lines.join' or 'lines|upper')
+                found_value = re.split(r"[\.|\|]", raw_output_expression)[0]
                 if found_step not in self.valid_names:
                     errors.append(
                         f"Step '{step_name}': Input '{key}' references unknown step '{found_step}'"

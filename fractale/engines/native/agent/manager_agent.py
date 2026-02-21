@@ -10,7 +10,7 @@ from .helper_agent import HelperAgent
 
 manager_prompt = f"""You are a planner agent. Your goal is to interactively work with a user to derive a plan. A plan is a sequence of steps. Each step has a name, and can be a call to a tool or prompt endpoint. You should look at the tools and prompts you have access to. Inspect the goals of the user, and write a plan. The plan MUST be a json list, where each item has a type (tool or agent) and a set of inputs (key value pairs). If an input is an agent, it MUST have a "prompt" that corresponds to a server prompt endpoint. For a server prompt endpoint, please use "inputs" to define arguemnts for the prompt generation. If you request an agent with a prompt endpoint, you can assume the agent will be able to call the same tools that you see. You should only call tools if there is a clear, logical step that should happen without agentic thinking. A tool MUST minimally have the structure {{"name": "<name>", "tool": "<tool_call>", "type": "tool"}} with the "name" of your choosing and the name of the call under "tool." If the function call has arguments, put those as key value pairs under "inputs." There is NO interactive user input after our interaction here, and you CANNOT define a custom prompt for a step, so you must carefully define your entire plan now. You MUST come up with a list of steps (agent types that use prompts and tool types) that can run an entire orchestration. For now, you MUST define all inputs. Inputs CAN use Jinja2 syntax to reference inputs and outputs from other steps, eg.., {{{{steps.<step_name>.<inputs|outputs>.<key_name>}}}}. When possible and known, you MUST make an effort to use strings/numbers directly as input values. You cannot reference outputs for a step that has not been run yet.
 For each step, you can optionally define a "transitions" key that is also a dictionary with (also optional) "success" and "failure." Upon success or failure, the state machine will transition to the step that matches the name of the string that you provide. If you are CERTAIN about the output structure of a step (from the tool) you CAN define another top level key "rules" that is also a dictionar, and within the dictionary the keys MUST correspond to "failure" and/or "success." Each entry in the dictionary MUST be a list of strings to be evaluated against the code result returned by the tool or agent to trigger the condition. We use the library on pypi boolia.
-The first step in your list will be run first by default. For subsequent steps, you MUST include them in a transition somewhere to be included in the state machine. You MUST do your best to define transitions, when possible.
+The first step in your list will be run first by default. For subsequent steps, you MUST include them in a transition somewhere to be included in the state machine. You MUST do your best to define transitions, when possible. You MUST do your best to define rules, when possible. If there is a request that is stateful, you can use a strategy of creating a rule to retry on failure.
 
 Here is the user goal: %s
 
@@ -43,6 +43,11 @@ class ManagerAgent(HelperAgent):
                 # We need to make sure we have steps, and they are not empty
                 if result.data and "steps" in result.data and result.data["steps"]:
 
+                    errors = StepsValidator(result.data["steps"]).validate()
+                    if errors:
+                        prompt = f"Your plan needs work:\n{errors}"
+                        continue
+
                     # Check with user that steps are ok (only yes or feedback)
                     preview = json.dumps(result.data["steps"], indent=4)
                     is_ok = await self.ask_validate_user(
@@ -52,10 +57,6 @@ class ManagerAgent(HelperAgent):
 
                     # First we need to validate the steps
                     if is_ok == "yes":
-                        errors = StepsValidator(result.data["steps"]).validate()
-                        if errors:
-                            prompt = f"Your plan needs work:\n{errors}"
-                            continue
 
                         # Set schemas for steps
                         result.data["steps"] = self.set_step_maps(result.data["steps"])
