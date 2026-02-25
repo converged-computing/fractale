@@ -1,9 +1,12 @@
 tools:
   # Name based on flux so the agent sees it is flux-specific
   - path: flux_mcp.validate.flux_validate_batch_jobspec
-  - path: hpc_mcp.t.utils.sleep_timer
-  - path: hpc_mcp.t.filesystem.read_file
-  - path: hpc_mcp.t.filesystem.list_directory
+  - path: hpc_mcp.timer.sleep_timer
+  - path: hpc_mcp.filesystem.read_file
+  - path: hpc_mcp.filesystem.list_directory
+#  - path: hpc_mcp.db.database_query
+#  - path: hpc_mcp.db.database_save
+#  - path: hpc_mcp.db.database_get
   - path: flux_mcp.resource.flux_resource_list
   - path: flux_mcp.validate.flux_validate_jobspec
   - path: flux_mcp.job.flux_submit_job
@@ -13,5 +16,5 @@ tools:
   - path: flux_mcp.sched.flux_sched_qmanager_stats
 
 prompts:
-  - path: fractale.tools.validate.validate_jobspec_expert
-  - path: fractale.tools.transform.transform_jobspec_expert
+  - path: hpc_mcp.job.validate.validate_jobspec_expert
+  - path: hpc_mcp.job.transform.transform_jobspec_expert

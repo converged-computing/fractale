@@ -4,5 +4,5 @@ tools:
     name: validate_flux_jobspec
 
 prompts:
-  - path: fractale.tools.validate.validate_jobspec_expert
-  - path: fractale.tools.transform.transform_jobspec_expert
+  - path: hpc_mcp.job.validate.validate_jobspec_expert
+  - path: hpc_mcp.job.transform.transform_jobspec_expert

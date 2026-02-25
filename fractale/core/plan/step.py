@@ -152,7 +152,12 @@ class Step:
 
     @property
     def tool(self):
-        return self.spec.get("tool")
+        return self.spec.get("tool") or self.spec.get("")
+
+    @property
+    def agent(self):
+        # Sub-agent "tool"
+        return self.spec.get("agent")
 
     @property
     def rules(self):

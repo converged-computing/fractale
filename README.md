@@ -59,7 +59,7 @@ To prototype with Flux, open the code in the devcontainer. Install the library a
 
 ```bash
 pip install -e .[all] --break-system-packages
-pip install flux-mcp hpc-mcp IPython --break-system-packages
+pip install flux-mcp hpc-mcp[all] IPython --break-system-packages
 flux start
 ```
 
@@ -95,6 +95,15 @@ And then run fractale with our local tool defined (`-r` means registry to add):
 
 ```bash
 fractale prompt -r ./examples/registry/parser-agents.yaml Write me a flux job that tells a joke, and then ask the result parser tool to derive a regular expression for the punchline.
+```
+
+#### LAMMPS Run
+
+This requires LAMMPS (or similar) installed, and running a set of tools that include a database and the optimization agent.
+
+```bash
+mcpserver start --config ./examples/servers/run-job.yaml
+fractale prompt -r ./examples/registry/analysis-agents.yaml Discover resources and run a LAMMPS job "lmp" with Flux using data in /code. Use the optimization agent step to optimize lammps, and keep retrying the run until the agent decides to stop.
 ```
 
 #### Flux JobSpec Translation
@@ -155,6 +164,14 @@ Here are a few design choices (subject to change, of course). I am starting with
 - Async is annoying but I'm using it. This means debugging is largely print statements and not interactive.
 - We use [mcp-server](https://github.com/converged-computing/mcp-server) as the MCP server.
 
+
+## TODO
+
+- add optimization agent, finish flux-mcp example for dmeo, fractale screenshots
+- add saving of graph and transitions to state machine for research.
+- where would we add algorithms here?
+- get job logs / info needs better feedback for agent
+- need to make spack / modules software discovery tools.
 
 ## License
 

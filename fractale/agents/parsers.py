@@ -72,6 +72,7 @@ class ResultParserAgent:
             "log_text": {"type": "string", "description": "The raw log content."},
         },
         "required": ["metric_name", "log_text"],
+        "annotations": {"fractale.type": "agent"},
     }
 
     def __init__(self):

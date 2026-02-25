@@ -51,7 +51,7 @@ class Manager(StateMachineAgent):
         # The state machine is given callbacks for running an agent or tool, defined here.
         sm = WorkflowStateMachine(
             states=self.plan.states,
-            callbacks={"agent": self.run_agent, "tool": self.run_tool},
+            callbacks={"prompt": self.run_prompt, "tool": self.run_tool, "agent": self.run_tool},
             ui=self.ui,
         )
 
@@ -100,7 +100,7 @@ class Manager(StateMachineAgent):
             logger.error(f"Orchestration failed: {e}")
             raise e
 
-    def run_agent(self, step):
+    def run_prompt(self, step):
         """
         Runs the WorkerAgent for an 'agent' type step.
         """
@@ -129,11 +129,15 @@ class Manager(StateMachineAgent):
     def run_tool(self, step):
         """
         Runs a deterministic Tool directly (no LLM).
+
+        This also works for step agents, which are labeled as "agent" in the state machine,
+        but are technically served as tool endpoints.
         """
         start_time = datetime.now()
 
         async def call():
-            tool_call = {"name": step.tool, "args": step.inputs}
+            # A tool call can be an explicit tool, or a sub-agent (exposed as a tool)
+            tool_call = {"name": step.tool or step.agent, "args": step.inputs}
             return await self.call_tool(tool_call)
 
         result = utils.run_sync(call())
