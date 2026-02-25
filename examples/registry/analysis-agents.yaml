@@ -1,0 +1,4 @@
+tools:
+  - path: fractale.agents.general.PromptAgent
+  - path: fractale.agents.parsers.ResultParserAgent
+  - path: fractale.agents.optimize.OptimizeAgent

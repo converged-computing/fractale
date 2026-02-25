@@ -1,0 +1,24 @@
+tools:
+  # Name based on flux so the agent sees it is flux-specific
+  - path: flux_mcp.validate.flux_validate_batch_jobspec
+  - path: hpc_mcp.timer.sleep_timer
+  - path: hpc_mcp.filesystem.read_file
+  - path: hpc_mcp.filesystem.list_directory
+  - path: hpc_mcp.build.spack.spack_list
+  - path: hpc_mcp.build.spack.spack_find
+  - path: hpc_mcp.build.spack.spack_spec
+  - path: hpc_mcp.build.spack.spack_info
+  - path: hpc_mcp.build.spack.spack_install
+  - path: hpc_mcp.db.database_save
+  - path: hpc_mcp.db.database_get
+  - path: flux_mcp.resource.flux_resource_list
+  - path: flux_mcp.validate.flux_validate_jobspec
+  - path: flux_mcp.job.flux_submit_job
+  - path: flux_mcp.job.flux_cancel_job
+  - path: flux_mcp.job.flux_get_job_info
+  - path: flux_mcp.job.flux_get_job_logs
+  - path: flux_mcp.sched.flux_sched_qmanager_stats
+
+prompts:
+  - path: hpc_mcp.job.validate.validate_jobspec_expert
+  - path: hpc_mcp.job.transform.transform_jobspec_expert
