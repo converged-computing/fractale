@@ -1,3 +1,4 @@
+import ast
 import json
 import re
 from dataclasses import dataclass
@@ -127,5 +128,9 @@ def parse_response(raw_response: Any, metrics: dict = None):
     try:
         data = json.loads(utils.extract_code_block(content))
     except (json.JSONDecodeError, TypeError):
+        try:
+            data = ast.literal_eval(content)
+        except:
+            pass
         pass
     return StepResult(content=content, data=data, metrics=metrics)

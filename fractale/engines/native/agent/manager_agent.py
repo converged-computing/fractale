@@ -8,9 +8,37 @@ from fractale.logger.logger import logger
 
 from .helper_agent import HelperAgent
 
-manager_prompt = f"""You are a planner agent. Your goal is to interactively work with a user to derive a plan. A plan is a sequence of steps. Each step has a name, and can be a call to a tool or prompt endpoint. You should look at the tools and prompts you have access to. Inspect the goals of the user, and write a plan. The plan MUST be a json list, where each item has a type (tool or agent) and a set of inputs (key value pairs). If an input is an agent, it MUST have a "prompt" that corresponds to a server prompt endpoint. For a server prompt endpoint, please use "inputs" to define arguemnts for the prompt generation. If you request an agent with a prompt endpoint, you can assume the agent will be able to call the same tools that you see. You should only call tools if there is a clear, logical step that should happen without agentic thinking. A tool MUST minimally have the structure {{"name": "<name>", "tool": "<tool_call>", "type": "tool"}} with the "name" of your choosing and the name of the call under "tool." If the function call has arguments, put those as key value pairs under "inputs." There is NO interactive user input after our interaction here, and you CANNOT define a custom prompt for a step, so you must carefully define your entire plan now. You MUST come up with a list of steps (agent types that use prompts and tool types) that can run an entire orchestration. For now, you MUST define all inputs. Inputs CAN use Jinja2 syntax to reference inputs and outputs from other steps, eg.., {{{{steps.<step_name>.<inputs|outputs>.<key_name>}}}}. When possible and known, you MUST make an effort to use strings/numbers directly as input values. You cannot reference outputs for a step that has not been run yet.
-For each step, you can optionally define a "transitions" key that is also a dictionary with (also optional) "success" and "failure." Upon success or failure, the state machine will transition to the step that matches the name of the string that you provide. If you are CERTAIN about the output structure of a step (from the tool) you CAN define another top level key "rules" that is also a dictionar, and within the dictionary the keys MUST correspond to "failure" and/or "success." Each entry in the dictionary MUST be a list of strings to be evaluated against the code result returned by the tool or agent to trigger the condition. We use the library on pypi boolia.
+manager_prompt = f"""You are a planner agent. Your task is to inspect the goals of the user, and write a plan. The plan MUST be a json list, where each item has a type "tool" or "agent" or "prompt" and a set of inputs (key value pairs). You should look at the tools and prompts you have access to. Here are instructions for each step "type":
+
+prompt:
+type "prompt" is a call to a prompt endpoint, it MUST have a "prompt" that corresponds to the prompt endpoint name. A prompt will generate a prompt and then allow the LLM to respond to subsequent calls, with access to the same tools that you see. You should use "inputs" to define arguments for the prompt generation.
+
+tool:
+type "tool" corresponds to a tool endpoint. You should call tools if there is a clear, logical step that should happen without agentic thinking. A tool MUST minimally have the structure {{"name": "<name>", "tool": "<tool_call>", "type": "tool"}}. Arguments are key value pairs under "inputs."
+
+agent:
+A tool with an annotation for "fractale.type: agent" indicates an "agent" type call. An agent will orchestrate a scoped task, and have access to the same tool endpoints that you see. You should try to maximize use of agents, and derive a plan with fewer steps. A general prompt agent exists for generalized tasks, and should be used sparingly.
+
+Instructions
+1. DISCOVER tools and prompts available to you.
+2. EXPLORE resources available to you and information provided by tools
+3. CAPTURE information to derive steps for the state machine, a combination of agents, tool calls, and prompts.
+4. WRITE clear goals and tasks for sub agents that are specific to each task in the state machine.
+5. DEFINE "transitions" between steps and "rules" to guide them.
+
+The "transitions" key of a step is a dictionary with "success" and "failure." Upon success or failure, the state machine will transition to the step that matches the name of the string that you provide.
+The "rules." You should choose simplicity in your plan and aim for fewer steps.
+
+You should make tools calls on your own to maximally discover resources to guide the sub agents. You MUST come up with a list of steps that can run an entire orchestration. For now, you MUST define all inputs. Inputs CAN use Jinja2 syntax to reference inputs and outputs from other steps, eg.., {{{{steps.<step_name>.<inputs|outputs>.<key_name>}}}}. When possible and known, you MUST make an effort to use strings/numbers directly as input values. You cannot reference outputs for a step that has not been run yet.
+If you are CERTAIN about the output structure of a step you CAN define another step key "rules" that is also a dictionary, and within the dictionary the keys MUST correspond to "failure" and/or "success." Each entry in the dictionary MUST be a list of strings to be evaluated against the code result returned by the tool or agent to trigger the condition. We use the library on pypi boolia. Here are examples.
+
+{{"failure": ["not valid"]}}  "Fail is the valid key in the dictionary is set to False"
+{{"success": ["valid"]}}  "Succeed if the valid key in the dictionary is set to True
+{{"success": ["house.light.on"]}} "Succeed if this structure: {{"house": {{"light": {{"on": True}}}}}}"
+{{"failure": ["user.age >= 18 and 'ops' in user.roles"]}} "Fail {{"user": {{"age": 21, "roles": ["admin", "ops"]}}}}"
+
 The first step in your list will be run first by default. For subsequent steps, you MUST include them in a transition somewhere to be included in the state machine. You MUST do your best to define transitions, when possible. You MUST do your best to define rules, when possible. If there is a request that is stateful, you can use a strategy of creating a rule to retry on failure.
+If you are missing information or a tool, you MUST ask or tell the user what you need during planning.
 
 Here is the user goal: %s
 
@@ -42,7 +70,6 @@ class ManagerAgent(HelperAgent):
 
                 # We need to make sure we have steps, and they are not empty
                 if result.data and "steps" in result.data and result.data["steps"]:
-
                     errors = StepsValidator(result.data["steps"]).validate()
                     if errors:
                         prompt = f"Your plan needs work:\n{errors}"
@@ -119,8 +146,14 @@ class ManagerAgent(HelperAgent):
         """
         new_steps = []
         for step in steps:
+            agent_call = step.get("tool") or step.get("agent")
             if "prompt" in step:
                 step["schema"] = self.prompt_map.get(step["prompt"])
+                new_steps.append(step)
+            # This is a fractale agent
+            elif "agent" in step and agent_call in self.tool_map:
+                step["schema"] = self.tool_map.get(agent_call)
+                step["type"] = "agent"
                 new_steps.append(step)
             elif "tool" in step:
                 step["schema"] = self.tool_map.get(step["tool"])
