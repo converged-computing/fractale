@@ -51,7 +51,7 @@ class Manager(StateMachineAgent):
         # The state machine is given callbacks for running an agent or tool, defined here.
         sm = WorkflowStateMachine(
             states=self.plan.states,
-            callbacks={"prompt": self.run_prompt, "tool": self.run_tool, "agent": self.run_tool},
+            callbacks={"prompt": self.run_prompt, "tool": self.run_tool},
             ui=self.ui,
         )
 

@@ -59,26 +59,28 @@ def get_parser():
     subparsers.add_parser("version", description="show software version")
 
     # Run an agent
-    agent = subparsers.add_parser(
-        "agent",
+    run = subparsers.add_parser(
+        "run",
         formatter_class=argparse.RawTextHelpFormatter,
         description="run an agent",
     )
-    agent.add_argument(
+    run.add_argument(
         "plan",
-        help="provide a plan to a manager",
+        help="provide a plan to explicitly run",
     )
+
+    # Prompt is a convenience call to the general-> ask question (prompt) agent.
     prompt = subparsers.add_parser(
         "prompt",
         formatter_class=argparse.RawTextHelpFormatter,
-        description="run an agent",
+        description="ask a general agent to handle a prompt",
     )
     prompt.add_argument(
-        "instruction", help="provide a prompt instruction to the manager", nargs="*"
+        "instruction", help="provide an instruction for the agent to work on", nargs="*"
     )
 
     # Agent and prompt take the same inputs
-    for command in [agent, prompt]:
+    for command in [run, prompt]:
         command.add_argument("--mode", choices=["cli", "tui", "web"], default="cli")
         command.add_argument(
             "--engine", choices=["native", "langchain", "autogen"], default="native"
@@ -135,8 +137,8 @@ def run_fractale():
     setup_logger(quiet=args.quiet, debug=args.debug)
 
     # Here we can assume instantiated to get args
-    if args.command == "agent":
-        from .agent import main
+    if args.command == "run":
+        from .run import main
     elif args.command == "prompt":
         from .prompt import main
     else:

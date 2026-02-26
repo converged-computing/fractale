@@ -34,7 +34,7 @@ class OptimizeAgent:
     """
 
     # Metadata for the Registry/Orchestrator to expose this as a tool
-    name = "optimize_task"
+    name = "optimize"
     description = (
         "An autonomous specialist that takes a goal, discovers available tools, "
         "and iteratively executes/tweaks tasks until an optimal result is found."

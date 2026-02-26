@@ -6,7 +6,7 @@
 
 ## Design
 
-We create a robust and asynchronous server that can register and load tools of interest. The project here initially contained two "buckets" of assets: tools (functions, prompts, resources) and orchestration (agent frameworks and backends paired with models). Those are now (for the most part) separated into modular projects, and tools are added as needed:
+We create a robust and asynchronous orchestrator for scientific workloads. It interacts with an [mcp-server](https://github.com/converged-computing/mcp-server) to register and load tools of interest. Tools of interest come from:
 
 - [flux-mcp](https://github.com/converged-computing/flux-mcp): MCP tools for Flux Framework
 - [hpc-mcp](https://github.com/converged-computing/hpc-mcp): HPC tools for a larger set of HPC and converged computing use cases.
@@ -15,9 +15,36 @@ We create a robust and asynchronous server that can register and load tools of i
 
 The library here has the following abstractions.
 
-- **Plan** is the YAML manifest that any agent can read and deploy. ([fractale/core/plan](fractale/core/plan))
+- **Plan**: a YAML, human generated manifest that any agent can read and deploy. ([fractale/core/plan](fractale/core/plan))
+- **Step**: Units of work in a plan. A step can be of type:
+  - **plan**: An instruction to go to a manager to generate a larger plan
+  - **agen**t: a sub-agent task that is a specialized expert at a specific function. Sub-agents call tools, prompts, and other sub-agents (and can recurse)
+  - **tool**: an explicit tool call that includes inputs and outputs.
+  - **prompt**: an explicit prompt endpoint that includes inputs, and an output prompt for an LLM
 - **Engine**: The orchestration engine (native state machine) that instantiates agents ([fractale/engines/native](fractale/engines/native))
 - **Agents**: are independent units of a state machine, a sub- or helper- agent that can be run under a primary orchestrating (state machine) agent. Optional agents that are exposed to the LLM as possible steps are under ([fractale/agents](fractale/agents)), and agents that are essential to the top level orchestration are part of [fractale/engines/native/agent](fractale/engines/native/agent).
+
+### Client
+
+The client (high level) includes these calls:
+
+```bash
+# Run a specific, human generated plan
+fractale run ./examples/plans/<plan.yaml>
+
+# Run a specific sub-agent, first discovering and inspecting the environment to generate a more detailed prompt for it.
+fractale agent optimize <Describe high level optimization task>
+
+# Ask a random task (not necessarily an expert at anything, but access to all tools)
+# This is a convenience wrapper to calling fractale agent ask_question
+fractale prompt <General task to use server tools and prompts>
+
+# Show all sub-agents available
+fractale list
+
+# Come up with plan for larger state machine
+fractale plan <Describe high level general task>
+```
 
 ### Environment
 
@@ -30,18 +57,18 @@ The following variables can be set in the environment.
 | `FRACTALE_LLM_PROVIDER` | LLM Backend to use (gemini, openai, llama) | gemini |
 | `OPENAI_API_KEY` | API Key for an OpenAI model | unset |
 | `OPENAI_BASE_URL` | Base url for OpenAI | unset |
+| `GEMINI_API_KEY` | API key to use Google Gemini |
 
 Note that for provider, you can also designate on the command line. The default is Gemini (`gemini`). To change:
 
 
 ```bash
-fractale agent --backend openai ./examples/plans/transform-retry.yaml
+fractale run --backend openai ./examples/plans/transform-retry.yaml
 ```
 
 ### Agents
 
-The `fractale agent` command provides means to run build, job generation, and deployment agents.
-In our [first version](https://github.com/compspec/fractale), an agent corresponded to a kind of task (e.g., build). For this refactored version, the concept of an agent is represented in a prompt or persona, which can be deployed by a generic MCP agent with some model backend (e.g., Gemini, Llama, or OpenAI). For the framework, we were prototyping a state machine (native) approach. I started testing LangChain and AutoGen but found the churn and lack of transparency annoying.
+The `fractale agent` command provides means to request orchestration by a sub-agent. A sub-agent is an independent expert that is given access to all MCP endpoints and can orchestrate calls and user interaction to get to a desired outcome. Currently, sub-agent calls are passed through a manager that first inspects the environment to discover resources (compute, software, etc.) and come up with a scoped plan. This may change in the future.
 
 ## Usage
 
@@ -120,6 +147,14 @@ And then:
 fractale agent ./examples/plans/transform-retry.yaml
 ```
 
+### Spack Install and Run
+
+```bash
+git clone --depth 1 https://github.com/spack/spack /tmp/spack
+export PATH=/tmp/spack/bin:$PATH
+mcpserver start --config ./examples/servers/run-spack.yaml
+```
+
 ### Docker Build
 
 Let's test doing a build. I'm running this on my local machine that has Docker, and I'm using Gemini.
@@ -140,9 +175,6 @@ Start the server with the functions and prompt we need:
 ```bash
 mcpserver start --config ./examples/servers/docker-build.yaml
 ```
-
-**State Machine**
-
 ```bash
 # In the other, run the plan
 fractale agent ./examples/plans/build-lammps.yaml

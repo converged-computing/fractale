@@ -10,6 +10,7 @@ import fractale.utils as utils
 from fractale.logger.logger import logger
 
 tools = None
+default_registry = [{"path": "fractale.agents.general.PromptAgent"}]
 
 
 class LocalToolRegistry:
@@ -27,6 +28,9 @@ class LocalToolRegistry:
         self.registry = {}
         self.definitions = []
         self.load(paths)
+
+        # Bind default prompt agent
+        self.bind(default_registry)
 
     def load(self, registry_paths: List[str]):
         """
@@ -102,6 +106,7 @@ class LocalToolRegistry:
             name=name,
             description=getattr(instance, "description", cls.__doc__ or ""),
             inputSchema=getattr(instance, "input_schema", {"type": "object"}),
+            outputSchema=getattr(instance, "output_schema", {"type": "object"}),
         )
 
     def get_tools(self):

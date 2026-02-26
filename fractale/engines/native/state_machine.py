@@ -54,9 +54,9 @@ class WorkflowStateMachine:
         # Execute via callback function
         step.show()
 
-        # If we have a plan step, we need to interact with the user
-        # and get updates to the plan.
-        if step.type == "plan":
+        # An agent step type means we need to plan first.
+        # A plan step type (for >1 steps) also requires the planner
+        if step.type in ["agent", "plan"]:
             self.run_planner(step)
             step = self.states[self.current_state_name]
 
@@ -107,10 +107,13 @@ class WorkflowStateMachine:
     def run_planner(self, plan_step):
         """
         Run the planner. An interactive process to design steps and a plan.
+
+        For all sub-agents, we always require the planner. This can change.
         """
         # The result here is the steps (plan) and we show a shortened version
-        # The longer version here has the complete schemas
-        result = self.planner.run(plan_step, show_result=False)
+        # The step.type (agent or plan) determines if the planner is working on a step (agent)
+        # or a larger plan (plan)
+        result = self.planner.run(plan_step, show_result=False, run_type=plan_step.type)
         for i, step_data in enumerate(result.data["steps"]):
             step = Step(step_data)
             # Add the workflow reference to it

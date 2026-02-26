@@ -24,7 +24,8 @@ You must respond with a JSON object in a markdown code block.
 - If you need to ask the user a question:
   {"response": None, "question": "What is the specific parameter?", "choices": ["Option A", "Option B"]}
 
-- If you are calling tools, continue your reasoning until you reach one of the states above.
+If you are calling tools to understand your environment or gather information, continue your reasoning until you reach one of the states above.
+When you are done, you should return that structure of response and not make any tool calls or ask the user a question.
 """
 
 
@@ -34,7 +35,7 @@ class PromptAgent:
     """
 
     # Metadata for discovery by the Planner/Manager
-    name = "ask_question"
+    name = "ask"
     description = (
         "A specialist that answers complex questions or gathers information. "
         "It can use cluster tools, look up documentation, and ask the user for "

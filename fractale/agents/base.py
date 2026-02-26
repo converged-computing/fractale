@@ -109,17 +109,21 @@ class AgentBase:
 
         # Validate plan steps
         for step in self.plan.states.values():
-            if step.type == "agent":
+
+            # A prompt coincides with a prompt endpoint
+            if step.type == "prompt":
                 if step.prompt and step.prompt in self.prompt_map:
                     step.set_schema(self.prompt_map[step.prompt])
                 else:
                     logger.warning(f"⚠️ Prompt '{step.prompt}' not found on server.")
 
+            # Tools are tools, agents are exposed (and used) like tools
             elif step.type == "tool":
-                if step.tool in self.tool_map:
-                    step.set_schema(self.tool_map[step.tool])
+                endpoint = step.tool or step.agent
+                if endpoint in self.tool_map:
+                    step.set_schema(self.tool_map[endpoint])
                 else:
-                    logger.warning(f"⚠️ Tool '{step.tool}' not found in registry.")
+                    logger.warning(f"⚠️ Tool or agent '{endpoint}' not found in registry.")
 
     async def call_tool(self, call, metrics=None):
         """
