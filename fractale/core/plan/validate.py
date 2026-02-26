@@ -17,13 +17,12 @@ class StepsValidator:
         set_steps allows for update the class steps after.
         """
         self.steps = steps
-        # Save output schemas so we can evaluate jinja2 outputs
-        self.output_schemas = {
-            s["name"]: s.get("schema", {}).get("outputSchema") for s in steps if s.get("name")
-        }
+        # Save output schema lookups so we can evaluate jinja2 outputs
+        self.output_schemas = {s["name"]: s.output_schema for s in steps if s.get("name")}
+        self.input_schemas = {s["name"]: s.input_schema for s in steps if s.get("name")}
         self.valid_names = set(x.get("name") for x in steps if x.get("name"))
 
-    def validate(self):
+    def validate(self, required_annotation=None):
         """
         Ensure that the agent does not request a tool or prompt that does not exist.
 
@@ -33,13 +32,13 @@ class StepsValidator:
         # A validation resets errors. We will return errors, and reset again
         errors = []
         for i, step in enumerate(self.steps):
-            errors += self.validate_step(i, step)
+            errors += self.validate_step(i, step, required_annotation)
 
         # Return errors if we have them!
         if errors:
             return "\n".join(errors)
 
-    def validate_step(self, i, step):
+    def validate_step(self, i, step, required_annotation=None):
         """
         Validate a single step.
         """
@@ -49,11 +48,32 @@ class StepsValidator:
             errors.append(f"Step at index {i} is missing a 'name'")
             return errors
 
+        # Do we have required annotations?
+        errors += self.validate_annotations(step, required_annotation)
+
         # Are the transitions valid?
         errors += self.validate_transitions(step)
 
         # Outputs (inputs to  other steps) validation
         errors += self.validate_step_inputs(step)
+        return errors
+
+    def validate_annotations(self, step, required_annotation=None):
+        """
+        Validate that an annotation (dict) is present.
+        """
+        errors = []
+        if not required_annotation:
+            return errors
+        for key, value in required_annotation.items():
+            if key not in step.input_schema.get("annotations") or {}:
+                errors.append(f"Step {step.name} is missing required annotation {key}: {value}")
+                continue
+            found_value = step.input_schema["annotations"][key]
+            if found_value != value:
+                errors.append(
+                    f"Step {step.name} has incorrect annotation value for {key}. Want {value} found {found_value}"
+                )
         return errors
 
     def validate_transitions(self, step):

@@ -1,4 +1,3 @@
-from fractale.db import get_database
 from fractale.engines import get_engine
 
 from .runner import run_fractale

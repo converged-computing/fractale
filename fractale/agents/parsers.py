@@ -61,7 +61,7 @@ def normalize_log_text(log_input: Any) -> str:
 class ResultParserAgent:
 
     # Metadata for tool registration (used to trick agent that sniffs server)
-    name = "result_parser"
+    name = "result_parse"
     description = (
         "Intelligently extracts metrics from logs by generating regex and validating with a human."
     )
