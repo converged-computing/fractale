@@ -19,7 +19,7 @@ def main(args, extra, **kwargs):
     plan = Plan(
         {
             "name": "Agentic plan",
-            "steps": [{"name": "planner", "type": "plan", "instruction": prompt}],
+            "steps": [{"name": "ask", "type": "tool", "inputs": {"goal": prompt}}],
         }
     )
     engine.plan = plan

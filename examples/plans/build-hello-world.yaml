@@ -1,11 +1,9 @@
 name: "LAMMPS Build"
 steps:
-   # The persona generates the Dockerfile
-  - name: generate
+  - name: ask_question_agent
     type: agent
-    instruction: |
-     You are a Dockerfile build agent. Build a container hello-world with an ubuntu:2404 base that says "Hello World."
-     You MUST choose a tool to build the dockerfile and verify success with the build_container tool endpoint.
+    inputs: 
+      goal: You are a Dockerfile build agent. Build a container hello-world with an ubuntu:2404 base that says "Hello World." You MUST choose a tool to build the dockerfile and verify success with the build_container tool endpoint.
     rules:
       success: [returncode == 0]
     transitions:

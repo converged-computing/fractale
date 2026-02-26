@@ -16,9 +16,17 @@ class Step:
 
     def __init__(self, spec):
         self.spec = spec
-        self.schema = self.spec.get("schema")
+        self.schema = self.spec.get("schema") or {}
         # Inputs and outputs for jinja rendering
         self.outputs = {}
+
+    @property
+    def input_schema(self):
+        return (self.schema or {}).get("inputSchema")
+
+    @property
+    def output_schema(self):
+        return (self.schema or {}).get("outputSchema")
 
     @property
     def inputs(self):
@@ -99,7 +107,7 @@ class Step:
     def set_schema(self, schema: set):
         """
         Called by Manager after connecting to Server.
-        Defines which arguments the Prompt function accepts.
+        This schema is the model_dump and includes inputSchema and outputSchema.
         """
         self.schema = schema
 
@@ -136,7 +144,8 @@ class Step:
 
     @property
     def instruction(self):
-        return self.spec.get("instruction")
+        inputs = self.spec.get("inputs", {})
+        return inputs.get("goal") or inputs.get("prompt") or inputs.get("instruction")
 
     @property
     def allow_tools(self):
