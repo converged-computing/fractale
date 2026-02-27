@@ -2,25 +2,25 @@ name: "Transform Jobspec from Flux to Slurm"
 steps:
    # The persona generates the Dockerfile
   - name: transform
-    type: agent
+    type: prompt
     prompt: transform_jobspec_expert
     allow_tools: false
 
     # Inputs that can be passed forward to next steps
     inputs:
-      from_manager: flux
-      to_manager: slurm
+      from_manager: slurm
+      to_manager: flux
       script: |
-        #!/bin/bash
-        #FLUX -N 1
-        #FLUX -n 64
-        #FLUX -t 100s
-        #FLUX -o cpu-affinity=per-task
-        #FLUX --queue=pbatch
-        #FLUX --setattr=container_image=ghcr.io/converged-computing/lammps-reax:ubuntu22.04
-        #FLUX --output=job.{id}.out
-        #FLUX --error=job.{id}.err
-        #FLUX --job-name=lammps
+        #!/bin/bash                                                                                                          │
+        #SBATCH --nodes=1                                                                                                    │
+        #SBATCH --ntasks=64                                                                                                  │
+        #SBATCH --time=00:01:40                                                                                              │
+        #SBATCH --cpu-bind=cores                                                                                             │
+        #SBATCH --partition=pbatch                                                                                           │
+        #SBATCH --container-image=ghcr.io/converged-computing/lammps-reax:ubuntu22.04                                        │
+        #SBATCH --output=job.%j.out                                                                                          │
+        #SBATCH --error=job.%j.err                                                                                           │
+        #SBATCH --job-name=lammps 
         lmp -v x 8 -v y 8 -v z 8 -in in.reaxc.hns -nocite
 
     # This is the simplest case. The prompt above should generate
@@ -38,7 +38,7 @@ steps:
    # The persona provides the jobspec and asks for the translation
    # In this case we will call the transform (manual) endpoint explicitly
   - name: validate
-    type: agent    
+    type: prompt
     prompt: validate_jobspec_expert
 
     # This gets jobspec from the function call output above.
@@ -52,7 +52,7 @@ steps:
 
   - name: validate_manual
     type: tool
-    tool: validate_flux_jobspec
+    tool: flux_validate_jobspec
     inputs:
       content: "{{steps.transform.outputs.jobspec}}"
 

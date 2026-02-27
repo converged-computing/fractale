@@ -1,11 +1,11 @@
 name: "LAMMPS Build"
 steps:
-   # The persona generates the Dockerfile
-  - name: generate
+  - name: ask
     type: agent
-    instruction: |
-     You are a Dockerfile build agent. Build a container for LAMMPS called ghcr.io/converged-computing/lammps:latest with an ubuntu:24.04 base.
-     You MUST choose a tool to build the dockerfile and verify success with the build_container tool endpoint.
+    inputs:
+      goal: |
+         You are a Dockerfile build agent. Build a container for LAMMPS called ghcr.io/converged-computing/lammps:latest with an ubuntu:24.04 base.
+         You MUST choose a tool to build the dockerfile and verify success with the build_container tool endpoint.
     rules:
       success: [returncode == 0]
     transitions:

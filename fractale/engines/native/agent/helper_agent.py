@@ -30,11 +30,6 @@ class HelperAgent(StateMachineAgent):
     A simplified agent to make calls to a model.
     """
 
-    def __init__(self, name: str, ui=None):
-        self.name = name
-        self.ui = ui or CLIAdapter()
-        super().__init__()
-
     def ask(self, prompt, use_tools=True, memory=True):
         """
         Ask the agent a question (assume we want memory)

@@ -33,7 +33,7 @@ class WorkerAgent(StateMachineAgent):
             "steps": [],
         }
         # Debug Agent
-        self.debug_agent = DebugAgent(name="debug-agent", ui=self.ui)
+        self.debug_agent = DebugAgent()
         self.init()
 
     async def run_loop(self, *args, **kwargs):

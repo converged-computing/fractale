@@ -88,10 +88,12 @@ class Step:
         print(f"   type: '{self.type}'")
         if self.tool:
             print(f"   call: '{self.tool}'")
-        if self.prompt:
+        elif self.prompt:
             print(f"   call: '{self.prompt}'")
-        if self.instruction:
+        elif self.instruction:
             print(f"   call: prompt")
+        else:
+            print(f"   call: '{self.name}'")
 
     @property
     def tools(self):
