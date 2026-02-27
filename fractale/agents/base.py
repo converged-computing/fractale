@@ -118,7 +118,7 @@ class AgentBase:
                     logger.warning(f"⚠️ Prompt '{step.prompt}' not found on server.")
 
             # Tools are tools, agents are exposed (and used) like tools
-            elif step.type == "tool":
+            elif step.type in ["tool", "agent"]:
                 endpoint = step.tool or step.agent
                 if endpoint in self.tool_map:
                     step.set_schema(self.tool_map[endpoint])

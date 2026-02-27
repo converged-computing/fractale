@@ -61,6 +61,32 @@ class PromptAgent:
         "annotations": {"fractale.type": "agent"},
         "required": ["goal"],
     }
+    output_schema = {
+        "type": "object",
+        "properties": {
+            "success": {
+                "type": "boolean",
+                "description": "Whether the agent successfully generated a final response.",
+            },
+            "response": {
+                "type": "string",
+                "description": "The final answer content provided to the user.",
+            },
+            "turns": {
+                "type": "integer",
+                "description": "The number of reasoning turns/iterations completed.",
+            },
+            "error": {
+                "type": "string",
+                "description": "A descriptive error message if success is false.",
+            },
+            "last_output": {
+                "type": "string",
+                "description": "The raw text of the last LLM response if a timeout occurred.",
+            },
+        },
+        "required": ["success"],
+    }
 
     def __init__(self):
         """
@@ -77,7 +103,7 @@ class PromptAgent:
         """
         from fractale.agents.base import backend
 
-        logger.info(f"🧠 [PromptAgent] Starting task: {goal}")
+        logger.custom(f"🧠 Starting task: {goal}", title="Prompt Agent", border_style="blue")
 
         # Build the initial conversation state
         current_input = (
@@ -91,7 +117,7 @@ class PromptAgent:
             turn += 1
 
             # 1. Ask the LLM (Enable tools so it can investigate the cluster/env)
-            response_text, _, tool_calls = await backend.generate_response(
+            response_text, _, tool_calls = backend.generate_response(
                 prompt=current_input,
                 use_tools=True,
                 memory=True,  # Maintain history for follow-up questions
@@ -110,8 +136,7 @@ class PromptAgent:
 
             # 3. Parse the JSON Decision/Response
             try:
-                clean_json = backend.extract_code_block(response_text)
-                data = json.loads(clean_json)
+                data = json.loads(utils.extract_code_block(response_text))
 
                 # Case A: Final Response
                 if data.get("response"):
@@ -127,7 +152,7 @@ class PromptAgent:
 
                     # Intermittently prompt the user using our threaded UI bridge
                     user_answer = await asyncio.to_thread(
-                        utils.get_user_validation, message=question, options=choices
+                        utils.get_user_input, message=question, options=choices
                     )
 
                     # Feed the human's answer back into the LLM loop

@@ -18,8 +18,12 @@ class StepsValidator:
         """
         self.steps = steps
         # Save output schema lookups so we can evaluate jinja2 outputs
-        self.output_schemas = {s["name"]: s.output_schema for s in steps if s.get("name")}
-        self.input_schemas = {s["name"]: s.input_schema for s in steps if s.get("name")}
+        self.output_schemas = {
+            s["name"]: s["schema"].get("outputSchema", {}) for s in steps if s.get("name")
+        }
+        self.input_schemas = {
+            s["name"]: s["schema"].get("inputSchema", {}) for s in steps if s.get("name")
+        }
         self.valid_names = set(x.get("name") for x in steps if x.get("name"))
 
     def validate(self, required_annotation=None):
@@ -63,13 +67,15 @@ class StepsValidator:
         Validate that an annotation (dict) is present.
         """
         errors = []
+        input_schema = step["schema"].get("input_schema") or {}
+
         if not required_annotation:
             return errors
         for key, value in required_annotation.items():
-            if key not in step.input_schema.get("annotations") or {}:
+            if key not in input_schema.get("annotations", {}):
                 errors.append(f"Step {step.name} is missing required annotation {key}: {value}")
                 continue
-            found_value = step.input_schema["annotations"][key]
+            found_value = input_schema["annotations"][key]
             if found_value != value:
                 errors.append(
                     f"Step {step.name} has incorrect annotation value for {key}. Want {value} found {found_value}"

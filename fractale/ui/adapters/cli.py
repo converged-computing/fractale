@@ -1,6 +1,5 @@
 from rich import print
 
-from fractale.logger.logger import logger
 from fractale.ui.base import UserInterface
 
 

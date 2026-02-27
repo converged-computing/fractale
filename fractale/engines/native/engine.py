@@ -28,7 +28,7 @@ class Manager(StateMachineAgent):
 
         # Cache for persistent agents
         self.agent_cache = {}
-        self.agent = HelperAgent(name="state-machine-helper", ui=self.ui)
+        self.agent = HelperAgent()
         self._max_attempts = max_attempts
         super().__init__()
         self.init()
@@ -51,7 +51,7 @@ class Manager(StateMachineAgent):
         # The state machine is given callbacks for running an agent or tool, defined here.
         sm = WorkflowStateMachine(
             states=self.plan.states,
-            callbacks={"prompt": self.run_prompt, "tool": self.run_tool},
+            callbacks={"prompt": self.run_prompt, "tool": self.run_tool, "agent": self.run_tool},
             ui=self.ui,
         )
 
@@ -160,7 +160,7 @@ class Manager(StateMachineAgent):
         Check a tool call for an error and get a transition decision.
         """
         check = check_tool_call(tool_name, result.content)
-        logger.panel(check, "Tool Check Request")
+        logger.panel(result.content, "Tool Output Success/Fail Assessment")
         response = self.agent.ask(prompt=check, use_tools=False, memory=True)
         try:
             decision = json.loads(utils.get_code_block(response.content))

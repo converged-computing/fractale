@@ -10,7 +10,10 @@ import fractale.utils as utils
 from fractale.logger.logger import logger
 
 tools = None
-default_registry = [{"path": "fractale.agents.general.PromptAgent"}]
+default_registry = [
+    {"path": "fractale.agents.general.PromptAgent"},
+    {"path": "fractale.agents.manager.ManagerAgent"},
+]
 
 
 class LocalToolRegistry:
@@ -23,6 +26,10 @@ class LocalToolRegistry:
     """
 
     def __init__(self, paths):
+
+        # Ensure we do not duplcate
+        self.seen = set()
+
         # Maps tool names to callables (functions or class instances)
         # and keep the tool definitions from discovery
         self.registry = {}
@@ -67,6 +74,12 @@ class LocalToolRegistry:
                 print(f"Warning: tool definition {tool} is missing a 'path' attribute.")
                 continue
             path = tool["path"]
+
+            # Try to ensure we do not duplicate
+            if path in self.seen:
+                print(f"Warning: tool {tool} was already registered.")
+                continue
+            self.seen.add(path)
 
             # E.g., fractale.agents.parsers.ResultParserAgent
             try:
