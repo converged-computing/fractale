@@ -69,6 +69,14 @@ def get_parser():
         help="provide a plan to explicitly run",
     )
 
+    # List registered sub-agents
+    ls = subparsers.add_parser(
+        "list",
+        formatter_class=argparse.RawTextHelpFormatter,
+        description="run an agent",
+    )
+    ls.add_argument("--json", help="print result in json", action="store_true", default=False)
+
     # Prompt is a convenience call to the general-> ask question (prompt) agent.
     prompt = subparsers.add_parser(
         "prompt",
@@ -80,13 +88,11 @@ def get_parser():
     )
 
     # Agent and prompt take the same inputs
-    for command in [run, prompt]:
+    for command in [run, prompt, ls]:
         command.add_argument("--mode", choices=["cli", "tui", "web"], default="cli")
         command.add_argument(
             "--engine", choices=["native", "langchain", "autogen"], default="native"
         )
-        command.add_argument("--backend", choices=["openai", "gemini", "llama"], default="gemini")
-        command.add_argument("-r", "--registry", action="append", default=None)
         command.add_argument(
             "--database", help="URI for result storage (file://path or sqlite://path)"
         )
@@ -96,6 +102,9 @@ def get_parser():
             default=None,
             type=int,
         )
+        command.add_argument("-r", "--registry", action="append", default=None)
+        command.add_argument("--backend", choices=["openai", "gemini", "llama"], default="gemini")
+
     return parser
 
 
@@ -141,6 +150,8 @@ def run_fractale():
         from .run import main
     elif args.command == "prompt":
         from .prompt import main
+    elif args.command == "list":
+        from .list import main
     else:
         help(1)
     main(args, extra)

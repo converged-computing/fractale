@@ -41,9 +41,7 @@ fractale prompt <General task to use server tools and prompts>
 
 # Show all sub-agents available
 fractale list
-
-# Come up with plan for larger state machine
-fractale plan <Describe high level general task>
+fractale list --json
 ```
 
 ### Environment
@@ -155,6 +153,10 @@ export PATH=/tmp/spack/bin:$PATH
 mcpserver start --config ./examples/servers/run-spack.yaml
 ```
 
+```bash
+fractale prompt Install cowsay with spack, load it, and use it to tell a joke.
+```
+
 ### Docker Build
 
 Let's test doing a build. I'm running this on my local machine that has Docker, and I'm using Gemini.
@@ -176,34 +178,18 @@ Start the server with the functions and prompt we need:
 mcpserver start --config ./examples/servers/docker-build.yaml
 ```
 ```bash
-# In the other, run the plan
-fractale agent ./examples/plans/build-lammps.yaml
+# In the other, run a plan explicitly, or do the same with a command line prompt
+fractale run ./examples/plans/build-lammps.yaml
+fractale prompt Build a container for lammps with an ubuntu 24.04 base
 ```
 
-This works very well in Google Cloud (Gemini). I am not confident our on-premises models will easily choose the right tool. Hence the next design.
-The design is simple in that each agent is responding to state of error vs. success. In the [first version](https://github.com/compspec/fractale) of our library, agents formed a custom graph. In this variant, we refactor to use MCP server tools. It has the same top level design with a manager, but each step agent is like a small state machine governed by an LLM with access to MCP tools and resources.
-
-### Design Choices
-
-Here are a few design choices (subject to change, of course). I am starting with re-implementing our fractale agents with this framework. For that, instead of agents being tied to specific functions (as classes on their agent functions) we will have a flexible agent class that changes function based on a chosen prompt. It will use mcp functions, prompts, and resources. In addition:
-
-- Tools hosted here are internal and needed for the library. E.g, we have a prompt that allows getting a final status for an output, in case a tool does not do a good job.
-- For those hosted here, we don't use mcp.tool (and associated functions) directly, but instead add them to the mcp manually to allow for dynamic loading.
-- We are currently focused on autogen (and the others, langchain and native, will need updates)
-- Tools that are more general are provided under extral libraries (e.g., flux-mcp and hpc-mcp)
-- The function docstrings are expose to the LLM (so write good ones!)
-- We can use mcp.mount to extend a server to include others, or the equivalent for proxy (I have not tested this yet).
-- Async is annoying but I'm using it. This means debugging is largely print statements and not interactive.
-- We use [mcp-server](https://github.com/converged-computing/mcp-server) as the MCP server.
-
+This works very well in Google Cloud (Gemini). I am not confident our on-premises models will easily choose the right tool.
 
 ## TODO
 
-- add optimization agent, finish flux-mcp example for dmeo, fractale screenshots
 - add saving of graph and transitions to state machine for research.
-- where would we add algorithms here?
+- where would we add algorithms here (as tools!)?
 - get job logs / info needs better feedback for agent
-- need to make spack / modules software discovery tools.
 
 ## License
 

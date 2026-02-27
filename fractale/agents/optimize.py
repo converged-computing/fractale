@@ -5,7 +5,7 @@ from typing import Any, Dict
 import fractale.utils as utils
 from fractale.logger.logger import logger
 
-# This prompt is designed for the Sub-Agent to perform discovery and autonomous execution.
+# This prompt is designed for the sub-agent to perform discovery and autonomous execution.
 # It does not mention specific tools, only the requirement to use what is available.
 OPTIMIZE_SYSTEM_PROMPT = """
 You are an autonomous Optimization Sub-Agent. Your goal is to iteratively achieve the target provided by the user.
@@ -62,6 +62,20 @@ class OptimizeAgent:
         },
         "required": ["goal"],
         "annotations": {"fractale.type": "agent"},
+    }
+
+    output_schema = {
+        "type": "object",
+        "properties": {
+            "status": {"type": "string"},
+            "summary": {"type": "string"},
+            "fom": {"type": ["number", "string", "null"]},
+            "turns_taken": {"type": "integer"},
+            "last_reasoning": {"type": "string"},
+            "message": {"type": "string"},
+            "goal": {"type": "string"},
+        },
+        "required": ["status"],
     }
 
     def __init__(self):

@@ -1,10 +1,9 @@
-import json
 import logging
 
 from rich import print
 
+from fractale.agents.manager import ManagerAgent
 from fractale.core.plan.step import Step
-from fractale.engines.native.agent.manager_agent import ManagerAgent
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +21,7 @@ class WorkflowStateMachine:
         self.current_state_name = None
         self.callbacks = callbacks
         self.set_initial_state()
-        self.planner = ManagerAgent(name="state-machine-planner", ui=self.ui)
+        self.planner = ManagerAgent()
 
     def set_initial_state(self):
         """
@@ -48,7 +47,18 @@ class WorkflowStateMachine:
 
         # Are we terminal? That sounds dark...
         if step.type == "final":
+            print("LOOK AT FINAL STEP")
+            import IPython
+
+            IPython.embed()
             print("Current step is final, returning finished")
+            return {
+                "agent": prev_state_name,
+                "result": result.dict(),
+                "transition": transition,
+                "complete": workflow_done,
+                "state": outcome,
+            }
             return None, True
 
         # Execute via callback function
@@ -56,7 +66,7 @@ class WorkflowStateMachine:
 
         # An agent step type means we need to plan first.
         # A plan step type (for >1 steps) also requires the planner
-        if step.type in ["agent", "plan"]:
+        if step.type == "plan":
             self.run_planner(step)
             step = self.states[self.current_state_name]
 

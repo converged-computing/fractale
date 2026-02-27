@@ -1,12 +1,12 @@
 import asyncio
+import copy
 import json
 
 import fractale.core.result as results
 import fractale.utils as utils
 from fractale.core.plan.validate import StepsValidator
+from fractale.engines.native.agent.helper_agent import HelperAgent
 from fractale.logger.logger import logger
-
-from .helper_agent import HelperAgent
 
 boolia = f"""If you are CERTAIN about the output structure of a step from an output schema you MUST define "rules" that determine success or failure of the sub-agent. The "rules" is a dictionary, and within the dictionary the keys MUST correspond to "failure" and/or "success." Each entry in the dictionary MUST be a list of strings to be evaluated against the code result returned by the tool or agent to trigger the condition. We use the library on pypi boolia. Here are examples.
 
@@ -25,6 +25,7 @@ Instructions
 3. EXPLORE resources, data, and information available to you by requesting tool calls. The output will be returned to you to decide how to act next.
 4. WRITE a prompt for the sub-agent, and return as a SINGLE state machine step.
 
+You MUST not ask questions to the user in the sub-agent arguments, but instead YOU use tool calls to clarify before writing this prompt. Assume the sub-agent should run without uncertainy.
 The sub-agent will orchestrate a scoped task, and have access to the same tool endpoints that you see. You should return a single step under a list, where the step has the structure {{"name": "<name>", "agent": "<agent_tool_endpoint_name>", "type": "agent"}}. Arguments are key value pairs under "inputs."
 {boolia}
 
@@ -34,38 +35,65 @@ Here is the user goal: %s
 You MUST come up with a sub-agent prompt. To prompt the user for more information or ask a question, respond with a json structure with "prompt" and we will return the answer. You can add "options" to the "prompt" if you want to limit the user to a set of choices, and "default" to set a default choice. You MUST inspect the environment (resources, data) and have confidence about what you are going to run before you return the final single step list. It MUST be a single step list of steps under a "steps" key in the format requested.
 """
 
-# The higher level manager makes an entire plan.
-manager_prompt = f"""You are a planner agent. Your task is to inspect the goals of the user, and write a plan. The plan MUST be a json list, where each item has a type "agent" that coincides with a sub-agent that you can derive a specific prompt and inputs (key value pairs) for.
-
-Instructions
-1. DISCOVER tools and prompts available to you.
-2. EXPLORE resources available to you and information by calling tools.
-3. ASK questions to the user about information you cannot obtain.
-4. CAPTURE specific goals and other needed inputs to call sub-agents and FORMAT into the input arguments for the sub-agent step.
-5. DEFINE "transitions" between steps and "rules" to guide them.
-
-The "transitions" key of a step is a dictionary with "success" and "failure." Upon success or failure, the state machine will transition to the step that matches the name of the string that you provide.
-The "rules." You should choose simplicity in your plan and aim for fewer steps.
-
-You ARE ONLY ALLOWED to call tool steps that are labeled as fractale.agent, an annotation in the tool.
-You SHOULD make tool calls on your own to maximally discover resources to guide the sub agents. You MUST come up with a list of steps that can run an entire orchestration of sub-agents.
-Inputs CAN use Jinja2 syntax to reference inputs and outputs from other steps, eg.., {{{{steps.<step_name>.<inputs|outputs>.<key_name>}}}}. When possible and known, you MUST make an effort to use strings/numbers directly as input values. You cannot reference outputs for a step that has not been run yet.
-{boolia}
-
-The first step in your list will be run first by default. For subsequent steps, you MUST include them in a transition somewhere to be included in the state machine. You MUST do your best to define transitions, when possible. You MUST do your best to define rules, when possible. If there is a request that is stateful, you can use a strategy of creating a rule to retry on failure.
-If you are missing information or a tool, you MUST ask or tell the user what you need during planning.
-
-Here is the user goal: %s
-
-You MUST come up with a plan. If you want to prompt the user for more information or ask a question, respond with a json structure with "prompt" and we will return the answer. You can add "options" to the "prompt" if you want to limit the user to a set of choices, and "default" to set a default choice. You MUST inspect the environment (resources, data) and have confidence about what you are going to run before you return the final plan. When you have enough information to run the plan, return it as a list of steps under a "steps" key in the format requested."""
-
 
 class ManagerAgent(HelperAgent):
     """
     Interact with the user to derive a plan.
     """
 
+    # Metadata for discovery by the Planner/Manager
+    name = "planner"
+    description = (
+        "A sub-agent planner that interactively works with the user to explore the "
+        "environment and derive a single, scoped sub-agent step to execute a task."
+    )
+
+    input_schema = {
+        "type": "object",
+        "properties": {
+            "instruction": {
+                "type": "string",
+                "description": "The high-level goal or task the user wants to accomplish.",
+            },
+            "max_turns": {
+                "type": "integer",
+                "default": 100,
+                "description": "The maximum number of reasoning/discovery turns allowed.",
+            },
+        },
+        "annotations": {"fractale.type": "agent"},
+        "required": ["instruction"],
+    }
+
+    output_schema = {
+        "type": "object",
+        "properties": {
+            "success": {
+                "type": "boolean",
+                "description": "Whether a valid plan step was generated.",
+            },
+            "steps": {
+                "type": "array",
+                "items": {"type": "object"},
+                "description": "A list containing the single generated state machine step.",
+            },
+            "summary": {
+                "type": "string",
+                "description": "A summary of the reasoning used to create the step.",
+            },
+            "error": {
+                "type": "string",
+                "description": "Error details if the planning phase failed.",
+            },
+        },
+        "required": ["success"],
+    }
+    # TODO vsoch: allow this to be a sub-agent (e.g., add the annotation?)
+
     agent_result_truncate = 1000
+
+    async def __call__(self, step, **kwargs):
+        return await self.run_loop(step, **kwargs)
 
     async def run_loop(self, step, **kwargs):
         """
@@ -73,12 +101,10 @@ class ManagerAgent(HelperAgent):
         """
         await self.set_lookup_maps()
 
-        # Default to plan type
-        run_type = kwargs.get("run_type") or "plan"
-        if run_type == "plan":
-            prompt = manager_prompt % step.instruction
-        else:
-            prompt = manager_step_prompt % step.instruction
+        # Extract run_type for validation logic
+        run_type = kwargs.get("run_type", "plan")
+
+        prompt = manager_step_prompt % step.instruction
 
         # Hide the larger instruction from the user
         logger.panel(step.instruction, title="Agent Request", color="green")
@@ -92,6 +118,9 @@ class ManagerAgent(HelperAgent):
                 # We need to make sure we have steps, and they are not empty
                 if result.data and "steps" in result.data and result.data["steps"]:
 
+                    # Set schemas for steps
+                    result.data["steps"] = self.set_step_maps(result.data["steps"])
+
                     # We want to make sure the manager is only selecting sub-agent steps
                     required_annotation = None if run_type == "plan" else {"fractale.type": "agent"}
                     errors = StepsValidator(result.data["steps"]).validate(required_annotation)
@@ -100,7 +129,7 @@ class ManagerAgent(HelperAgent):
                         continue
 
                     # Check with user that steps are ok (only yes or feedback)
-                    preview = json.dumps(result.data["steps"], indent=4)
+                    preview = self.get_steps_preview(result.data["steps"])
                     is_ok = await self.ask_validate_user(
                         f"Is this plan OK?\n```json\n{preview}\n```\n",
                         choices=["yes", "y", "feedback", "f"],
@@ -108,9 +137,6 @@ class ManagerAgent(HelperAgent):
 
                     # First we need to validate the steps
                     if is_ok == "yes":
-
-                        # Set schemas for steps
-                        result.data["steps"] = self.set_step_maps(result.data["steps"])
                         return result
                     prompt = f"Your plan needs work:\n{is_ok}"
 
@@ -122,14 +148,14 @@ class ManagerAgent(HelperAgent):
                         default=result.data.get("default"),
                     )
                     logger.panel(prompt, title="User Answer")
-                    prompt = manager_prompt % step.instruction + " " + prompt
+                    # Note: You likely wanted to keep the manager_step_prompt context here
+                    prompt = manager_step_prompt % step.instruction + " " + prompt
 
                 # prompt the user with whatever the LLM is presenting
-
                 else:
                     prompt = await self.ask_user(result.content)
                     logger.panel(prompt, title="User Answer")
-                    prompt = manager_prompt % step.instruction + " " + prompt
+                    prompt = manager_step_prompt % step.instruction + " " + prompt
 
             else:
                 tool_calls = []
@@ -141,11 +167,22 @@ class ManagerAgent(HelperAgent):
 
                 prompt = "Here are the results from your calls:" + "\n".join(tool_calls)
 
+    def get_steps_preview(self, steps):
+        """
+        Show the user a preview. We leave out inputs/outputs for brevity.
+        """
+        updated = []
+        for step in steps:
+            step = copy.deepcopy(step)
+            del step["schema"]
+            updated.append(step)
+
+        return json.dumps(updated, indent=4)
+
     async def ask_user(self, prompt, options=None, default=None):
         """
         Ask the user to respond to a question without blocking the event loop.
         """
-        # asyncio.to_thread allows the blocking rich.prompt to run in a background thread
         return await asyncio.to_thread(utils.get_user_input, prompt, options, default)
 
     async def ask_validate_user(
@@ -154,7 +191,6 @@ class ManagerAgent(HelperAgent):
         """
         Ask the user to respond to a question without blocking the event loop.
         """
-        # asyncio.to_thread allows the blocking rich.prompt to run in a background thread
         return await asyncio.to_thread(
             utils.get_user_validation,
             message,
@@ -166,7 +202,7 @@ class ManagerAgent(HelperAgent):
 
     def set_step_maps(self, steps):
         """
-        Set maps for steps. All prompts/tools should be known (checked by validate_steps above).
+        Set maps for steps. All prompts/tools should be known.
         """
         new_steps = []
         for step in steps:
@@ -176,18 +212,18 @@ class ManagerAgent(HelperAgent):
                 step["schema"] = self.prompt_map.get(step["prompt"])
                 new_steps.append(step)
                 found = True
-            # This is a fractale agent, we set as a tool call
             elif "agent" in step and agent_call in self.tool_map:
                 step["schema"] = self.tool_map.get(agent_call)
                 step["type"] = "tool"
                 new_steps.append(step)
                 found = True
-            elif "tool" in step and step.tool in self.tool_map:
+            elif "tool" in step and step.get("tool") in self.tool_map:
                 step["schema"] = self.tool_map.get(step["tool"])
-                # Force the type to be tool, we don't have a use case for it to not be
                 step["type"] = "tool"
                 new_steps.append(step)
                 found = True
             if not found:
-                raise ValueError(f"Call {step.name} is not a known tool, prompt, or agent.")
+                # Get the name safely for the error message
+                name = step.get("name", "unnamed step")
+                raise ValueError(f"Call {name} is not a known tool, prompt, or agent.")
         return new_steps

@@ -75,6 +75,24 @@ class ResultParserAgent:
         "annotations": {"fractale.type": "agent"},
     }
 
+    output_schema = {
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean"},
+            "metric": {"type": "string"},
+            "value": {
+                "anyOf": [
+                    {"type": "string"},
+                    {"type": "array", "items": {"type": "string"}},
+                    {"type": "null"},
+                ]
+            },
+            "method": {"type": "string"},
+            "regex": {"type": "string"},
+        },
+        "required": ["success"],
+    }
+
     def __init__(self):
         self.metadata = {}
 
@@ -105,6 +123,7 @@ class ResultParserAgent:
         if metric_name in GLOBAL_REGEX_CACHE:
             pattern = GLOBAL_REGEX_CACHE[metric_name]
             match = self.find_match(pattern, log_text)
+            print(f"Using cached regular expression {pattern}: found {match}")
             return {
                 "success": match is not None,
                 "value": " ".join(match) if match else None,
@@ -139,7 +158,7 @@ class ResultParserAgent:
 
             # The last appended will be the final (correct)
             attempts.append(regex)
-            print("Received parsed log result...")
+            print(f"Attempted {regex} and received parsed log result...")
             logger.custom(regex, title="[green]Result Parser[/green]", border_style="green")
             match = self.find_match(regex, log_text)
             self.metadata["tries"][metric_name] += 1
