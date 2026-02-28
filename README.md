@@ -1,10 +1,10 @@
-# fractale-mcp
+# fractale
 
 > Agentic state-machine orchestrator to support MCP Tools and Science
 
 [![PyPI version](https://badge.fury.io/py/fractale-mcp.svg)](https://badge.fury.io/py/fractale-mcp)
 
-![img/fractale.png](img/fractale.png)
+![https://github.com/converged-computing/fractale/raw/main/img/fractale-small.png](https://github.com/converged-computing/fractale/raw/main/img/fractale-small.png)
 
 ## Design
 
