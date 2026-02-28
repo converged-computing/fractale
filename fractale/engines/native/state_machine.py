@@ -59,7 +59,6 @@ class WorkflowStateMachine:
                 "complete": workflow_done,
                 "state": outcome,
             }
-            return None, True
 
         # Execute via callback function
         step.show()

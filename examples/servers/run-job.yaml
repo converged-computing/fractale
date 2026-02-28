@@ -2,11 +2,10 @@ tools:
   # Name based on flux so the agent sees it is flux-specific
   - path: flux_mcp.validate.flux_validate_batch_jobspec
   - path: hpc_mcp.timer.sleep_timer
-  - path: hpc_mcp.filesystem.read_file
-  - path: hpc_mcp.filesystem.list_directory
-#  - path: hpc_mcp.db.database_query
-#  - path: hpc_mcp.db.database_save
-#  - path: hpc_mcp.db.database_get
+  - path: hpc_mcp.filesystem.filesystem_read_file
+  - path: hpc_mcp.filesystem.filesystem_list_directory
+  - path: hpc_mcp.filesystem.filesystem_find_directory
+  - path: hpc_mcp.filesystem.filesystem_find_file
   - path: flux_mcp.resource.flux_resource_list
   - path: flux_mcp.validate.flux_validate_jobspec
   - path: flux_mcp.job.flux_submit_job

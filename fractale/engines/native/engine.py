@@ -87,9 +87,6 @@ class Manager(StateMachineAgent):
                     self.ui.log(f"🌀 State Machine Complete")
                     break
 
-                # TODO Ask user what to do next
-                # This doesn't work in async
-
             # Save and return
             self.metadata["attempts"] = loops
             self.save_results(tracker)

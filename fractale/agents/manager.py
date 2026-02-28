@@ -8,7 +8,7 @@ from fractale.core.plan.validate import StepsValidator
 from fractale.engines.native.agent.helper_agent import HelperAgent
 from fractale.logger.logger import logger
 
-boolia = f"""If you are CERTAIN about the output structure of a step from an output schema you MUST define "rules" that determine success or failure of the sub-agent. The "rules" is a dictionary, and within the dictionary the keys MUST correspond to "failure" and/or "success." Each entry in the dictionary MUST be a list of strings to be evaluated against the code result returned by the tool or agent to trigger the condition. We use the library on pypi boolia. Here are examples.
+boolia = f"""If you are CERTAIN about the output structure of a sub-agent from an output schema you MAY define "rules" that determine success or failure of the sub-agent. The "rules" is a dictionary, and within the dictionary the keys MUST correspond to "failure" and/or "success." Each entry in the dictionary MUST be a list of strings to be evaluated against the code result returned by the tool or agent to trigger the condition. We use the library on pypi boolia. Here are examples.
 
 {{"failure": ["not valid"]}}  "Fail is the valid key in the dictionary is set to False"
 {{"success": ["valid"]}}  "Succeed if the valid key in the dictionary is set to True
@@ -25,11 +25,11 @@ Instructions
 3. EXPLORE resources, data, and information available to you by requesting tool calls. The output will be returned to you to decide how to act next.
 4. WRITE a prompt for the sub-agent, and return as a SINGLE state machine step.
 
-You MUST not ask questions to the user in the sub-agent arguments, but instead YOU use tool calls to clarify before writing this prompt. Assume the sub-agent should run without uncertainy.
+You MAY ask questions to the user to formulate the sub-agent prompt. You SHOULD first use tool calls to clarify before writing this prompt. Assume the sub-agent should run without uncertainy.
 The sub-agent will orchestrate a scoped task, and have access to the same tool endpoints that you see. You should return a single step under a list, where the step has the structure {{"name": "<name>", "agent": "<agent_tool_endpoint_name>", "type": "agent"}}. Arguments are key value pairs under "inputs."
 {boolia}
 
-If you are missing information or a tool, you MUST ask the user for clarification.
+If you are missing information or a tool, you MUST ask the user for clarification. You MUST tell the sub-agent to retry if a step is erroneous.
 Here is the user goal: %s
 
 You MUST come up with a sub-agent prompt. To prompt the user for more information or ask a question, respond with a json structure with "prompt" and we will return the answer. You can add "options" to the "prompt" if you want to limit the user to a set of choices, and "default" to set a default choice. You MUST inspect the environment (resources, data) and have confidence about what you are going to run before you return the final single step list. It MUST be a single step list of steps under a "steps" key in the format requested.
