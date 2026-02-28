@@ -93,7 +93,9 @@ def get_parser():
     )
     for command in [prompt, agent]:
         command.add_argument(
-            "instruction", help="provide an instruction for the agent to work on", nargs="*"
+            "instruction",
+            nargs=argparse.REMAINDER,
+            help="provide an instruction for the agent to work on",
         )
 
     # Agent and prompt take the same inputs

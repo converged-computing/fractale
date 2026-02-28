@@ -8,7 +8,7 @@ from fractale.logger.logger import logger
 # This prompt is designed for the sub-agent to perform discovery and autonomous execution.
 # It does not mention specific tools, only the requirement to use what is available.
 OPTIMIZE_SYSTEM_PROMPT = """
-You are an autonomous Optimization Sub-Agent. Your goal is to iteratively achieve the target provided by the user.
+You are an autonomous Optimization sub-agent. Your goal is to iteratively achieve the target provided by the user.
 
 ### YOUR OPERATING LOOP
 1. DISCOVER: Look at the tools and prompts available to you.
@@ -18,12 +18,11 @@ You are an autonomous Optimization Sub-Agent. Your goal is to iteratively achiev
 5. DECIDE: Either "retry" with a new configuration or "stop" because the goal is met or impossible.
 
 ### CONSTRAINTS
-- You MUST save all intermediate data and FOMs to the database using available storage tools.
+- You MAY save all intermediate data and FOMs to the database using available storage tools.
 - You MUST be precise with tool arguments.
-- When you are finished, you MUST return a final JSON object with:
+- You MUST make tool or sub-agent or prompt requests as needed. The output will be returned to you.
+- When you are finished, you MUST not call tools, and you MUST return a final JSON object with:
   {"decision": "stop", "summary": "Detailed explanation of result", "final_fom": <value>}
-- If you decide to retry, produce a JSON object with:
-  {"decision": "retry", "reasoning": "...", "next_step": "..."}
 """
 
 
@@ -41,7 +40,7 @@ class OptimizeAgent:
         "If you have an optimization task, this agent can use the same tool endpoints,"
         "and you should investigate the environment and options and generate a single"
         "step and tool call for this agent to execute, describing the goal and task context"
-        "as parameters."
+        "as parameters. A high number (e.g., more than 30) max turns is suggested."
     )
     input_schema = {
         "type": "object",
@@ -105,11 +104,7 @@ class OptimizeAgent:
             turn += 1
             logger.info(f"🧠 [Sub-Agent] Turn {turn}/{max_turns}")
 
-            # 1. DISCOVERY: Get current tools from the environment
-            # This ensures the agent sees Flux, Database, and Parsers
-            # available_tools = await backend.list_tools()
-
-            # 2. REASON: Ask the LLM what to do
+            # Reason Ask the LLM what to do
             # We use use_tools=True so the LLM can emit tool calls
             # memory=True preserves the history of this sub-loop
             response_text, _, tool_calls = backend.generate_response(
@@ -120,19 +115,16 @@ class OptimizeAgent:
 
             # 3. ACT: If the agent wants to use tools, execute them
             if tool_calls:
+                current_prompt = ""
                 for call in tool_calls:
                     # Execute the tool via the backend's unified dispatcher
                     tool_result = await backend.call_tool(call)
 
                     # Update the prompt for the next turn with the tool results
-                    current_prompt = f"Tool '{call['name']}' returned: {tool_result.content}"
+                    current_prompt += f"\nTool '{call['name']}' returned: {tool_result.content}"
 
-                    # If the LLM is calling a tool, it's not done yet, so we continue the loop
-                    continue
-
-            # 4. PARSE DECISION: Look for the JSON stop/retry structure in the text
-            try:
-                # We extract code blocks from the conversational text
+            # Parse decision:: Look for the JSON stop structure in the text
+            else:
                 clean_json = utils.extract_code_block(response_text)
                 decision_data = json.loads(clean_json)
 
@@ -144,28 +136,6 @@ class OptimizeAgent:
                         "fom": decision_data.get("final_fom"),
                         "turns_taken": turn,
                     }
-
-                if decision_data.get("decision") == "retry":
-                    reasoning = decision_data.get("reasoning", "Tweak requested")
-                    next_step = decision_data.get("next_step", "")
-
-                    # Human-in-the-loop: Ask for permission before starting a new iteration
-                    # This uses the UI function defined in your library
-                    user_msg = f"Turn {turn}: Sub-agent proposes a retry.\nReasoning: {reasoning}\nNext: {next_step}\n\nProceed?"
-                    user_ok = await asyncio.to_thread(
-                        utils.get_user_validation, message=user_msg, options=["yes", "no"]
-                    )
-
-                    if user_ok != "yes":
-                        return {"status": "stopped_by_user", "last_reasoning": reasoning}
-
-                    # Feed the decision back into the loop as the next "user" prompt
-                    current_prompt = f"User approved retry. Proceed with: {next_step}"
-
-            except (json.JSONDecodeError, KeyError):
-                # If no valid JSON found, the agent might just be chatting or
-                # forgot the format. We nudge it in the next turn.
-                current_prompt = "You must continue until you decide to 'stop'. Ensure your decision is in JSON format."
 
         return {
             "status": "limit_reached",
