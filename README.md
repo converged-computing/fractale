@@ -185,6 +185,17 @@ fractale prompt Build a container for lammps with an ubuntu 24.04 base
 
 This works very well in Google Cloud (Gemini). I am not confident our on-premises models will easily choose the right tool.
 
+### Kubernetes
+
+Note that I have a kind cluster running.
+
+```bash
+mcpserver start --config ./examples/servers/kubernetes-job.yaml
+```
+```bash
+fractale prompt Deploy a basic hello world job to Kubernetes and get the output log.
+```
+
 ## TODO
 
 - add saving of graph and transitions to state machine for research.

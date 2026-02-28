@@ -137,7 +137,12 @@ class Manager(StateMachineAgent):
             tool_call = {"name": step.tool or step.agent, "args": step.inputs}
             return await self.call_tool(tool_call)
 
-        result = utils.run_sync(call())
+        # I have seen it try to call tools that do not exist
+        try:
+            result = utils.run_sync(call())
+        except Exception as e:
+            return parse_response(f"There was an error calling {step.tool}: {e}")
+
         duration = (datetime.now() - start_time).total_seconds()
         result.metrics = {"duration": duration, "tool": step.name}
 

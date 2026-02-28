@@ -123,14 +123,17 @@ class WorkflowStateMachine:
         # The step.type (agent or plan) determines if the planner is working on a step (agent)
         # or a larger plan (plan)
         result = self.planner.run(plan_step, show_result=False, run_type=plan_step.type)
-        for i, step_data in enumerate(result.data["steps"]):
-            step = Step(step_data)
-            # Add the workflow reference to it
-            step.workflow = plan_step.workflow
-            # The first step is the initial step
-            if i == 0:
-                self.current_state_name = step.name
-            self.states[step.name] = step
+        try:
+            for i, step_data in enumerate(result.data["steps"]):
+                step = Step(step_data)
+                # Add the workflow reference to it
+                step.workflow = plan_step.workflow
+                # The first step is the initial step
+                if i == 0:
+                    self.current_state_name = step.name
+                self.states[step.name] = step
+        except:
+            print(f"There was an unexpected error:\n{result.content}")
 
     def ask_next_step(self, result):
         """
