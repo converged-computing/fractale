@@ -4,6 +4,8 @@
 
 [![PyPI version](https://badge.fury.io/py/fractale-mcp.svg)](https://badge.fury.io/py/fractale-mcp)
 
+![img/fractale.png](img/fractale.png)
+
 ## Design
 
 We create a robust and asynchronous orchestrator for scientific workloads. It interacts with an [mcp-server](https://github.com/converged-computing/mcp-server) to register and load tools of interest. Tools of interest come from:
