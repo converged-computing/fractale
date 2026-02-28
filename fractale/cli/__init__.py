@@ -58,16 +58,24 @@ def get_parser():
     )
     subparsers.add_parser("version", description="show software version")
 
-    # Run an agent
+    # Run an agentic plan (yaml file)
     run = subparsers.add_parser(
         "run",
         formatter_class=argparse.RawTextHelpFormatter,
-        description="run an agent",
+        description="run a specific plan (YAML file)",
     )
     run.add_argument(
         "plan",
         help="provide a plan to explicitly run",
     )
+
+    # Run a sub-agent
+    agent = subparsers.add_parser(
+        "agent",
+        formatter_class=argparse.RawTextHelpFormatter,
+        description="run an sub-agent expert to complete a task",
+    )
+    agent.add_argument("agent", help="Sub-agent name to call")
 
     # List registered sub-agents
     ls = subparsers.add_parser(
@@ -83,12 +91,13 @@ def get_parser():
         formatter_class=argparse.RawTextHelpFormatter,
         description="ask a general agent to handle a prompt",
     )
-    prompt.add_argument(
-        "instruction", help="provide an instruction for the agent to work on", nargs="*"
-    )
+    for command in [prompt, agent]:
+        command.add_argument(
+            "instruction", help="provide an instruction for the agent to work on", nargs="*"
+        )
 
     # Agent and prompt take the same inputs
-    for command in [run, prompt, ls]:
+    for command in [run, prompt, ls, agent]:
         command.add_argument("--mode", choices=["cli", "tui", "web"], default="cli")
         command.add_argument(
             "--engine", choices=["native", "langchain", "autogen"], default="native"
@@ -152,6 +161,8 @@ def run_fractale():
         from .prompt import main
     elif args.command == "list":
         from .list import main
+    elif args.command == "agent":
+        from .agent import main
     else:
         help(1)
     main(args, extra)
