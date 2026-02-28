@@ -66,8 +66,13 @@ class WorkflowStateMachine:
         # An agent step type means we need to plan first.
         # A plan step type (for >1 steps) also requires the planner
         if step.type == "plan":
+            plan_step_name = step.name
             self.run_planner(step)
             step = self.states[self.current_state_name]
+
+            # Delete the plan step to be conservative
+            if plan_step_name in self.states:
+                del self.states[plan_step_name]
 
         runner = self.callbacks.get(step.type)
         if not runner:

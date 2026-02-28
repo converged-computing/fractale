@@ -102,12 +102,15 @@ class StepResult:
             return "\n".join(data["errors"])
 
         # Fall back to content if error is there
-        if (
-            not data
-            and isinstance(self.content, str)
-            and re.search(self.content.lower(), "(error|fail|abort)")
-        ):
-            return self.content
+        try:
+            if (
+                not data
+                and isinstance(self.content, str)
+                and re.search(self.content.lower(), "(error|fail|abort)")
+            ):
+                return self.content
+        except:
+            pass
 
 
 def parse_response(raw_response: Any, metrics: dict = None):
