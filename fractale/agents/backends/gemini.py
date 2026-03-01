@@ -153,18 +153,19 @@ class GeminiBackend(LLMBackend):
         elif memory:
             response = self.chat_all_tools.send_message(prompt)
 
-        # If we get a malformed response, it could be a traceback. Clean and try again
-        print(response)
-        if response.finish_reason == "MALFORMED_FUNCTION_CALL":
-            print("⚠️ Malformed call detected. Reactive cleaning triggered...")
-            cleaned_prompt = clean_output(prompt)
-            return self.generate_response(
-                cleaned_prompt, use_tools=use_tools, memory=memory, tools=tools
-            )
-
         # Did we get tool calls?
         calls = []
         if response.candidates:
+
+            # Did we get a malformed response?
+            finish_reason = response.candidates[0].finish_reason            
+            if finish_reason.name == "MALFORMED_FUNCTION_CALL":
+                print("⚠️ Malformed call detected. Cleaning output to retry...")
+                cleaned_prompt = clean_output(prompt)                
+                return self.generate_response(
+                    cleaned_prompt, use_tools=use_tools, memory=memory, tools=tools
+                )
+
             calls = self.generate_tool_calls(response.candidates)
         elif use_tools and not response.candidates:
             return "Error: Blocked by safety filters or empty response", None, []
