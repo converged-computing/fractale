@@ -47,10 +47,6 @@ class WorkflowStateMachine:
 
         # Are we terminal? That sounds dark...
         if step.type == "final":
-            print("LOOK AT FINAL STEP")
-            import IPython
-
-            IPython.embed()
             print("Current step is final, returning finished")
             return {
                 "agent": prev_state_name,

@@ -100,6 +100,8 @@ class GeminiBackend(LLMBackend):
         for candidate in candidates:
             text_content = ""
             tool_calls = []
+            if not candidate.content.parts:
+                continue
             for part in candidate.content.parts:
                 if part.text:
                     text_content += part.text
@@ -151,6 +153,15 @@ class GeminiBackend(LLMBackend):
         elif memory:
             response = self.chat_all_tools.send_message(prompt)
 
+        # If we get a malformed response, it could be a traceback. Clean and try again
+        print(response)
+        if response.finish_reason == "MALFORMED_FUNCTION_CALL":
+            print("⚠️ Malformed call detected. Reactive cleaning triggered...")
+            cleaned_prompt = clean_output(prompt)
+            return self.generate_response(
+                cleaned_prompt, use_tools=use_tools, memory=memory, tools=tools
+            )
+
         # Did we get tool calls?
         calls = []
         if response.candidates:
@@ -177,3 +188,19 @@ class GeminiBackend(LLMBackend):
             final_text = response.text
 
         return final_text, usage, calls
+
+
+def clean_output(data: Any) -> str:
+    """
+    Try to handle characters that trigger malformed JSON responses
+    without removing important content.
+    """
+    # Convert to string if it's a dict/list from tool_result.content
+    text = str(data)
+    text = text.replace("{", "❴").replace("}", "❵")
+    text = text.replace("[", "❲").replace("]", "❳")
+    text = text.replace('"', "'")
+    text = text.replace("\\", "/")
+    lines = text.splitlines()
+    fenced = "\n".join([f"| {line}" for line in lines])
+    return f"### RE-PROCESSED DATA (CLEANED FOR PARSING):\n{fenced}"
