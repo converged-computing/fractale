@@ -26,12 +26,6 @@ class WorkerAgent(StateMachineAgent):
         self.step = step
         self.ui = ui
         self.max_attempts = max_attempts or 5
-        self.metadata = {
-            "name": name,
-            "status": "pending",
-            "times": {},
-            "steps": [],
-        }
         # Debug Agent
         self.debug_agent = DebugAgent()
         self.init()
@@ -130,7 +124,7 @@ class WorkerAgent(StateMachineAgent):
             self.show_instruction(instruction)
 
             # This is making an agentic call, with or without tools
-            response, metrics, calls = backend.generate_response(
+            response, calls = backend.generate_response(
                 prompt=instruction,
                 use_tools=use_tools,
                 tools=self.step.tools,
@@ -140,7 +134,7 @@ class WorkerAgent(StateMachineAgent):
 
             # Quick return if no tool callss
             if not calls:
-                result = results.parse_response(utils.get_code_block(response), metrics)
+                result = results.parse_response(utils.get_code_block(response))
 
                 # But if we have calls, better determine the state
                 transition = self.step.match_rules(result.data or result.content)
@@ -153,7 +147,7 @@ class WorkerAgent(StateMachineAgent):
             # Process all calls requested by LLM
             tool_results = []
             for call in calls:
-                result = await self.call_tool(call, metrics)
+                result = await self.call_tool(call)
 
                 # Stop early if we have a transition
                 transition = self.step.match_rules(result.data or result.content)

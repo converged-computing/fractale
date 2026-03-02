@@ -1,4 +1,5 @@
 from fractale.core.plan import Plan
+from fractale.db import get_database
 from fractale.engines import get_engine
 from fractale.logger.logger import logger
 
@@ -14,6 +15,7 @@ def main(args, extra, **kwargs):
         engine=args.engine,
         backend=args.backend,
         max_attempts=args.max_attempts,
+        database=get_database(),
     )
     valid_names = set([x.name for x in engine.get_local_tools()])
     if args.agent not in valid_names:

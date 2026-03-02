@@ -77,13 +77,6 @@ class OptimizeAgent:
         "required": ["status"],
     }
 
-    def __init__(self):
-        """
-        The backend is the LLMBackend instance which provides
-        list_tools(), generate_response(), and call_tool().
-        """
-        self.metadata = {}
-
     async def __call__(
         self, goal: str, task_context: str = "", max_turns: int = 30
     ) -> Dict[str, Any]:
@@ -107,11 +100,15 @@ class OptimizeAgent:
             # Reason Ask the LLM what to do
             # We use use_tools=True so the LLM can emit tool calls
             # memory=True preserves the history of this sub-loop
-            response_text, _, tool_calls = backend.generate_response(
+            response_text, tool_calls = backend.generate_response(
                 prompt=current_prompt,
                 use_tools=True,
                 memory=True,
             )
+
+            if not response_text and not tool_calls:
+                current_prompt = "Your last response was empty. Please provide your next tool call or final response."
+                continue
 
             # 3. ACT: If the agent wants to use tools, execute them
             if tool_calls:

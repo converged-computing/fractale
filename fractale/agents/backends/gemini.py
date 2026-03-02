@@ -3,6 +3,7 @@ import os
 from typing import Any, Dict, List, Tuple
 
 from fractale.core.config import ModelConfig
+from fractale.db import get_database
 
 from .backend import LLMBackend
 
@@ -34,6 +35,7 @@ class GeminiBackend(LLMBackend):
         self.tools = tools
         if not self.tools:
             self.tools = asyncio.run(self.list_tools())
+        self.database = get_database()
 
     # Configs with different levels of tool allowances
     @property
@@ -158,10 +160,10 @@ class GeminiBackend(LLMBackend):
         if response.candidates:
 
             # Did we get a malformed response?
-            finish_reason = response.candidates[0].finish_reason            
+            finish_reason = response.candidates[0].finish_reason
             if finish_reason.name == "MALFORMED_FUNCTION_CALL":
                 print("⚠️ Malformed call detected. Cleaning output to retry...")
-                cleaned_prompt = clean_output(prompt)                
+                cleaned_prompt = clean_output(prompt)
                 return self.generate_response(
                     cleaned_prompt, use_tools=use_tools, memory=memory, tools=tools
                 )
@@ -176,6 +178,15 @@ class GeminiBackend(LLMBackend):
             for k, v in response.usage_metadata.model_dump().items():
                 if v is not None and isinstance(v, int):
                     usage[k] = v
+            self.database.record_metric(
+                {
+                    "use_tools": use_tools,
+                    "metrics": usage,
+                    "memory": memory,
+                    "tools": tools,
+                    "prompt": prompt,
+                }
+            )
 
         # I noticed we get a warning by returning response.text when we have
         # tool calls. So we extract text parts to avoid the SDK warning
@@ -188,7 +199,7 @@ class GeminiBackend(LLMBackend):
         else:
             final_text = response.text
 
-        return final_text, usage, calls
+        return final_text, calls
 
 
 def clean_output(data: Any) -> str:

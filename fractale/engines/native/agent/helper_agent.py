@@ -14,7 +14,6 @@ class HelperAgentResponse:
     """
 
     content: str
-    metrics: Optional[dict] = None
     calls: Optional[List] = None
 
 
@@ -36,10 +35,8 @@ class HelperAgent(StateMachineAgent):
         """
         from fractale.agents.base import backend
 
-        response, metrics, calls = backend.generate_response(
-            prompt, use_tools=use_tools, memory=memory
-        )
-        return HelperAgentResponse(response, metrics, calls)
+        response, calls = backend.generate_response(prompt, use_tools=use_tools, memory=memory)
+        return HelperAgentResponse(response, calls)
 
 
 class DebugAgent(HelperAgent):

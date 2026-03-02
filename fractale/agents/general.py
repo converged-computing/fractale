@@ -88,13 +88,6 @@ class PromptAgent:
         "required": ["success"],
     }
 
-    def __init__(self):
-        """
-        The backend is injected by AgentBase.load_local_tools.
-        It provides list_tools(), generate_response(), and call_tool().
-        """
-        self.metadata = {}
-
     async def __call__(
         self, goal: str, task_context: str = "", max_turns: int = 10
     ) -> Dict[str, Any]:
@@ -117,7 +110,7 @@ class PromptAgent:
             turn += 1
 
             # 1. Ask the LLM (Enable tools so it can investigate the cluster/env)
-            response_text, _, tool_calls = backend.generate_response(
+            response_text, tool_calls = backend.generate_response(
                 prompt=current_input,
                 use_tools=True,
                 memory=True,  # Maintain history for follow-up questions

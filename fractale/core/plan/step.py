@@ -170,6 +170,19 @@ class Step:
         # Sub-agent "tool"
         return self.spec.get("agent")
 
+    def get_type(self):
+        """
+        Determine the type of step.
+        """
+        if self.tool:
+            return "tool"
+        elif self.agent:
+            return "agent"
+        elif self.prompt:
+            return "prompt"
+        # We should not get here
+        return "unknown"
+
     @property
     def rules(self):
         """

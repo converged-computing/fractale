@@ -113,7 +113,7 @@ class ManagerAgent(HelperAgent):
             result = self.ask(prompt, use_tools=True, memory=True)
 
             if not result.calls:
-                result = results.parse_response(result.content, result.metrics)
+                result = results.parse_response(result.content)
 
                 # We need to make sure we have steps, and they are not empty
                 if result.data and "steps" in result.data and result.data["steps"]:

@@ -16,7 +16,6 @@ class StepResult:
 
     content: str
     data: Optional[Dict] = None
-    metrics: Optional[Dict] = None
     transition: Optional[str] = None
     attempts: Optional[int] = None
 
@@ -25,8 +24,6 @@ class StepResult:
         Dump to dictionary for saving.
         """
         result = {"has_error": self.has_error}
-        if self.metrics:
-            result["metrics"] = self.metrics
         if self.data:
             result["data"] = self.data
         elif self.content:
@@ -113,7 +110,7 @@ class StepResult:
             pass
 
 
-def parse_response(raw_response: Any, metrics: dict = None):
+def parse_response(raw_response: Any):
     """
     Parses the raw return value from fastmcp.Client.call_tool into a robust ToolResult.
     """
@@ -136,4 +133,4 @@ def parse_response(raw_response: Any, metrics: dict = None):
         except:
             pass
         pass
-    return StepResult(content=content, data=data, metrics=metrics)
+    return StepResult(content=content, data=data)
