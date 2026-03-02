@@ -4,6 +4,7 @@ from datetime import datetime
 
 import fractale.utils as utils
 from fractale.core.result import parse_response
+from fractale.db import get_database
 from fractale.engines.native.agent import HelperAgent
 from fractale.logger import logger
 from fractale.tools.calls import check_tool_call
@@ -24,7 +25,7 @@ class Manager(StateMachineAgent):
         self.reset(plan)
         self.ui = ui or CLIAdapter()
         self.attempts = 0
-        self.database = database
+        self.database = database or get_database()
 
         # Cache for persistent agents
         self.agent_cache = {}
@@ -56,7 +57,6 @@ class Manager(StateMachineAgent):
         )
 
         logger.info(f"✅ State Machine Initialized: {len(self.plan.states)} states.")
-        self.metadata["status"] = "running"
 
         # Start Execution Loop
         tracker = []
@@ -72,7 +72,6 @@ class Manager(StateMachineAgent):
                 logger.info(f"🌀 State Machine Update: {result['transition']}.")
 
                 # Are we done? We need to break from True
-                self.metadata["status"] = result["state"]
                 if result["state"] == "complete":
                     self.ui.log_workflow_complete(result["state"])
                     break
@@ -88,12 +87,10 @@ class Manager(StateMachineAgent):
                     break
 
             # Save and return
-            self.metadata["attempts"] = loops
-            self.save_results(tracker)
+            self.save_results(tracker, loops)
             return tracker
 
         except Exception as e:
-            self.metadata["status"] = "Failed"
             logger.error(f"Orchestration failed: {e}")
             raise e
 
@@ -121,7 +118,12 @@ class Manager(StateMachineAgent):
                 max_attempts=max_attempts,
                 ui=self.ui,
             )
-        return agent.run()
+
+        # Ensure we record prompt step
+        self.database.start_step(step.name, "prompt", {"output": result.content})
+        result = agent.run()
+        self.database.finish_step(step.name, "prompt", {"output": result.content})
+        return result
 
     def run_tool(self, step):
         """
@@ -130,26 +132,28 @@ class Manager(StateMachineAgent):
         This also works for step agents, which are labeled as "agent" in the state machine,
         but are technically served as tool endpoints.
         """
-        start_time = datetime.now()
+        step_name = step.tool or step.agent
+        step_type = step.get_type()
 
         async def call():
             # A tool call can be an explicit tool, or a sub-agent (exposed as a tool)
-            tool_call = {"name": step.tool or step.agent, "args": step.inputs}
+            tool_call = {"name": step_name, "args": step.inputs}
             return await self.call_tool(tool_call)
 
         # I have seen it try to call tools that do not exist
         try:
-            result = utils.run_sync(call())
+            self.database.start_step(step_name, step_type, {"inputs": step.inputs})
+            result = asyncio.run(call())
+            # result = utils.run_sync(call())
         except Exception as e:
-            return parse_response(f"There was an error calling {step.tool}: {e}")
-
-        duration = (datetime.now() - start_time).total_seconds()
-        result.metrics = {"duration": duration, "tool": step.name}
+            return parse_response(f"There was an error calling {step_name}: {e}")
+        self.database.finish_step(step.name, step_type, {"outputs": result.data or result.content})
 
         # Case 1: We have explicit rules to update the step transition, and match
         transition = step.match_rules(result.data or result.content)
         if transition:
             result.transition = transition
+
         # Case 2: Ask an agent what the outcome is
         else:
             decision = {}
@@ -179,7 +183,7 @@ class Manager(StateMachineAgent):
 
         return decision
 
-    def save_results(self, tracker):
+    def save_results(self, tracker, loops=None):
         """
         Delegates saving to the configured Database backend.
         """
@@ -188,7 +192,6 @@ class Manager(StateMachineAgent):
         data = {
             "steps": tracker,
             "plan_source": self.plan.plan_path,
-            "status": self.metadata.get("status"),
-            "metadata": self.metadata,
+            "state_machine_loops": loops,
         }
         self.database.save(data)

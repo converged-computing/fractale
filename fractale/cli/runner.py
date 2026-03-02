@@ -1,17 +1,10 @@
 from rich import print
 
-from fractale.db import get_database
-
 
 def run_fractale(engine, args):
     """
     Shared function to run fractale between agent/prompt commands
     """
-    # Prepare a database for saving results (optional)
-    database = get_database(args.database)
-    if database:
-        database.connect()
-
     result = None
 
     # Select interaction mode and attach UI
@@ -33,7 +26,5 @@ def run_fractale(engine, args):
 
     # Clean up or close database if relevant
     finally:
-        if database:
-            database.close()
-        elif result is not None:
+        if result is not None:
             print(result)

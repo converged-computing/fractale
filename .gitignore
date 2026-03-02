@@ -5,3 +5,4 @@ dist
 env
 .eggs
 __pycache__
+.fractale

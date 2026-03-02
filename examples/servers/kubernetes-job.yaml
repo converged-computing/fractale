@@ -1,0 +1,11 @@
+tools:
+  - path: hpc_mcp.timer.sleep_timer
+  - path: mcp_kubernetes_server.create.k8s_create
+  - path: mcp_kubernetes_server.create.k8s_apply
+  - path: mcp_kubernetes_server.get.k8s_crds
+  - path: mcp_kubernetes_server.get.k8s_get
+  - path: mcp_kubernetes_server.kubeclient.setup_client
+  - path: mcp_kubernetes_server.logs.k8s_logs
+  - path: mcp_kubernetes_server.get.k8s_apis
+  - path: mcp_kubernetes_server.describe.k8s_describe
+  - path: mcp_kubernetes_server.events.k8s_events

@@ -93,9 +93,6 @@ class ResultParserAgent:
         "required": ["success"],
     }
 
-    def __init__(self):
-        self.metadata = {}
-
     def find_match(self, regex, log):
         """
         Use several strategies to find a match
@@ -138,10 +135,7 @@ class ResultParserAgent:
 
         # If the prompt has previous error, this can get too long for user to see
         print(textwrap.indent(prompt[0:1000], "> ", predicate=lambda _: True))
-        if "tries" not in self.metadata:
-            self.metadata["tries"] = {}
-        if metric_name not in self.metadata["tries"]:
-            self.metadata["tries"][metric_name] = 0
+        tries = 0
 
         # If too many retries, ask for human input/help.
         retries = 0
@@ -161,7 +155,7 @@ class ResultParserAgent:
             print(f"Attempted {regex} and received parsed log result...")
             logger.custom(regex, title="[green]Result Parser[/green]", border_style="green")
             match = self.find_match(regex, log_text)
-            self.metadata["tries"][metric_name] += 1
+            tries += 1
 
             # If we have a match, check and cut out earlier
             if match:
@@ -184,6 +178,7 @@ class ResultParserAgent:
                         "metric": metric_name,
                         "value": match,
                         "regex": regex,
+                        "tries": tries,
                     }
 
                 elif is_correct == "no":

@@ -4,11 +4,11 @@ import os
 
 from fastmcp import Client
 from fastmcp.client.transports import StreamableHttpTransport
-from rich.markdown import Markdown
 
 import fractale.core.result as results
 import fractale.utils as utils
 from fractale.core.config import ModelConfig
+from fractale.db import get_database
 from fractale.logger.logger import logger
 
 backend = None
@@ -21,9 +21,9 @@ class AgentBase:
         self.prompt_map = {}
         self.reset()
         self.init()
-        self.metadata = {"times": {}}
         # Cache tools to call once. This assumes we won't change
         self._tools = None
+        self.database = get_database()
 
     def reset(self):
         """
@@ -51,7 +51,7 @@ class AgentBase:
         Simplified handy version of generate response without additional metadata.
         This assumes no calls or tools - we just want a text response.
         """
-        response, _, _ = self.generate_response(prompt, use_tools=False, memory=memory, tools=None)
+        response, _ = self.generate_response(prompt, use_tools=False, memory=memory, tools=None)
         return response
 
     async def list_tools(self):
@@ -125,7 +125,7 @@ class AgentBase:
                 else:
                     logger.warning(f"⚠️ Tool or agent '{endpoint}' not found in registry.")
 
-    async def call_tool(self, call, metrics=None):
+    async def call_tool(self, call):
         """
         Routes the tool call to either the Local Registry or the Remote MCP Server.
         """
@@ -139,13 +139,17 @@ class AgentBase:
             logger.info(f"🛠️  Calling: {name}")
 
         # Check local registry (functions or classes with __call__) or fallback to MCP server
+        self.database.start_step(name, "tool", {"inputs": call["args"]})
+
         if self.registry.has(name):
             result = await self.call_local_tool(name, call["args"])
         else:
             async with self.mcp_client:
                 result = await self.mcp_client.call_tool(name, call["args"])
 
-        result = results.parse_response(result, metrics)
+        result = results.parse_response(result)
+        self.database.finish_step(name, "tool", {"outputs": result.data or result.content})
+
         result.show()
         return result
 
