@@ -1,6 +1,7 @@
 import logging
 
 import fractale.core.plan.schema as schema
+import fractale.core.registry as registry
 import fractale.utils as utils
 from fractale.core.plan.step import Step
 
@@ -29,6 +30,16 @@ class Plan:
 
         # YAML List -> state graph
         self.states = self.do_compile(self.raw_data.get("steps", []))
+
+        # Tool agents can be added on the fly
+        self.add_tool_agents()
+
+    def add_tool_agents(self):
+        """
+        Register tool agents on the fly.
+        """
+        subagents = self.raw_data.get("agents") or []
+        registry.add_tools(subagents)
 
     def validate_schema(self):
         return schema.validate_plan(self.raw_data)
