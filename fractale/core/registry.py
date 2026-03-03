@@ -149,8 +149,16 @@ def add_tools(paths):
     if not tools:
         tools = LocalToolRegistry(paths)
 
-    paths = [{"path": path} for path in paths]
-    tools.bind(paths)
+    updated = []
+    for path in paths:
+        if isinstance(path, str):
+            updated.append({"path": path})
+        elif isinstance(path, dict) and "path" in path:
+            updated.append(path)
+        else:
+            raise ValueError(f"Path {path} is not valid.")
+
+    tools.bind(updated)
     return tools
 
 
