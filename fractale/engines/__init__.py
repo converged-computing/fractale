@@ -4,7 +4,7 @@ from fractale.core.plan import Plan
 
 
 def get_engine(
-    plan=None, engine="native", backend="gemini", ui=None, max_attempts=5, database=None
+    plan=None, engine="native", backend="gemini", ui=None, max_attempts=100, database=None
 ):
     """
     Get the fractale engine! 🚘
