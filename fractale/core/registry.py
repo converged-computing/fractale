@@ -94,12 +94,12 @@ class LocalToolRegistry:
             # Case 1: sub-agent class with __call__ and metadata attributes
             if inspect.isclass(obj):
                 new_tool = self.load_class_tool(obj, obj_name)
-                logger.debug(f"Bound local sub-agent: {new_tool.name}")
+                print(f"Bound local sub-agent: {new_tool.name}")
 
             # Case 2: standard function
             else:
                 new_tool = self.load_function_tool(obj, obj_name)
-                logger.debug(f"Bound local tool: {new_tool.name}")
+                print(f"Bound local tool: {new_tool.name}")
 
             self.definitions.append(new_tool)
 
