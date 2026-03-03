@@ -118,7 +118,7 @@ class WorkerAgent(StateMachineAgent):
             print(f"  use_tools: {use_tools}")
 
         # Each step internally can go up to some max tries
-        while loops < (self.step.max_attempts or 10):
+        while loops < (self.step.max_attempts or 100):
             # Start counting at 1. Like Matlab
             loops += 1
             self.show_instruction(instruction)

@@ -25,9 +25,10 @@ class LocalToolRegistry:
     instances or creations of agents).
     """
 
-    def __init__(self, paths):
+    def __init__(self, paths=None):
 
         # Ensure we do not duplcate
+        paths = paths or []
         self.seen = set()
 
         # Maps tool names to callables (functions or class instances)
@@ -136,6 +137,21 @@ class LocalToolRegistry:
             description=func.__doc__ or "Local utility function",
             inputSchema=getattr(func, "input_schema", {"type": "object"}),
         )
+
+
+def add_tools(paths):
+    """
+    Add tools can reference specific paths.
+
+    The registry should already be init.
+    """
+    global tools
+    if not tools:
+        tools = LocalToolRegistry(paths)
+
+    paths = [{"path": path} for path in paths]
+    tools.bind(paths)
+    return tools
 
 
 def init_registry(paths):

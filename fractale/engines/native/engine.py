@@ -36,7 +36,7 @@ class Manager(StateMachineAgent):
 
     @property
     def max_attempts(self):
-        return self._max_attempts or 5
+        return self._max_attempts or 100
 
     def run(self):
         """

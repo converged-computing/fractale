@@ -114,6 +114,9 @@ def get_parser():
             type=int,
         )
         command.add_argument("-r", "--registry", action="append", default=None)
+        command.add_argument(
+            "-t", "--tool", action="append", default=None, help="register sub-agent tool"
+        )
         command.add_argument("--backend", choices=["openai", "gemini", "llama"], default="gemini")
 
     return parser
@@ -144,6 +147,7 @@ def run_fractale():
 
     # Extra tools, resources, prompts, (capabilities) etc.
     registry.init_registry(args.registry or [])
+    registry.add_tools(args.subagents or [])
     agents.init_backend()
 
     if args.debug is True:
