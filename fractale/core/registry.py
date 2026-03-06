@@ -162,7 +162,7 @@ def add_tools(paths):
     return tools
 
 
-def init_registry(paths):
+def init_registry(paths=None):
     global tools
 
     # Global tools registry

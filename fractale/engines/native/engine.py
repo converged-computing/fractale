@@ -120,7 +120,7 @@ class Manager(StateMachineAgent):
             )
 
         # Ensure we record prompt step
-        self.database.start_step(step.name, "prompt", {"output": result.content})
+        self.database.start_step(step.name, "prompt", {"input": step.instruction})
         result = agent.run()
         self.database.finish_step(step.name, "prompt", {"output": result.content})
         return result
