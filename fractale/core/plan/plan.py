@@ -51,10 +51,6 @@ class Plan:
         compiled = {}
         step_names = [s["name"] for s in raw_steps]
 
-        # Add Terminal States
-        compiled["success"] = Step({"name": "success", "type": "final"})
-        compiled["failed"] = Step({"name": "failed", "type": "final"})
-
         for i, step_data in enumerate(raw_steps):
             name = step_data["name"]
 
