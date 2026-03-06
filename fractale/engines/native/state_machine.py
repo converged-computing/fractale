@@ -49,11 +49,8 @@ class WorkflowStateMachine:
         if step.type == "final":
             print("Current step is final, returning finished")
             return {
-                "agent": prev_state_name,
-                "result": result.dict(),
-                "transition": transition,
-                "complete": workflow_done,
-                "state": outcome,
+                "agent": self.current_state_name,
+                "state": "complete",
             }
 
         # Execute via callback function
