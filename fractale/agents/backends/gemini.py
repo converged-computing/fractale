@@ -1,5 +1,6 @@
 import asyncio
 import os
+import time
 from typing import Any, Dict, List, Tuple
 
 from fractale.core.config import ModelConfig
@@ -198,6 +199,12 @@ class GeminiBackend(LLMBackend):
             final_text = "".join(text_parts)
         else:
             final_text = response.text
+
+        # Google being flaky
+        if "503 UNAVAILABLE" in final_text:
+            print(final_text)
+            time.sleep(300)
+            return self.generate_response(prompt, use_tools, memory, tools)
 
         return final_text, calls
 
