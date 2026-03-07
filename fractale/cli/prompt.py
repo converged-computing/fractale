@@ -14,7 +14,7 @@ def main(args, extra, **kwargs):
         engine=args.engine,
         backend=args.backend,
         max_attempts=args.max_attempts,
-        database=get_database(),
+        database=get_database(args.database),
     )
     # Define the plan from the instruction
     prompt = " ".join(args.instruction)

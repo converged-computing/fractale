@@ -87,8 +87,7 @@ class Manager(StateMachineAgent):
                     break
 
             # Save and return
-            self.save_results(tracker, loops)
-            return tracker
+            return self.save_results(tracker, loops)
 
         except Exception as e:
             logger.error(f"Orchestration failed: {e}")
@@ -183,15 +182,20 @@ class Manager(StateMachineAgent):
 
         return decision
 
-    def save_results(self, tracker, loops=None):
+    def save_results(self, tracker, loops=None, extra=None):
         """
         Delegates saving to the configured Database backend.
         """
+        extra = extra or {}
+        from fractale.agents.base import backend
+
         if not self.database:
             return
         data = {
             "steps": tracker,
+            "model_name": backend.model_name,
             "plan_source": self.plan.plan_path,
             "state_machine_loops": loops,
         }
-        self.database.save(data)
+        data.update(extra)
+        return self.database.save(data)
