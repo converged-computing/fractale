@@ -16,6 +16,12 @@ class MemoryBackend:
     """
 
     def __init__(self):
+        self.reset()
+
+    def reset(self):
+        """
+        Reset database for new records.
+        """
         # A flat list of every event that happens in the process
         self.events: List[Dict[str, Any]] = []
         # Tokens, etc.
