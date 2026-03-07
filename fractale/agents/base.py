@@ -1,6 +1,7 @@
 import inspect
 import json
 import os
+from typing import Any
 
 from fastmcp import Client
 from fastmcp.client.transports import StreamableHttpTransport
@@ -129,6 +130,7 @@ class AgentBase:
         """
         Routes the tool call to either the Local Registry or the Remote MCP Server.
         """
+        from fractale.agents.base import backend
         result = None
         name = call["name"]
 
@@ -150,7 +152,7 @@ class AgentBase:
         result = results.parse_response(result)
 
         # Some APIs (e.g., OpenAI) require adding the tool result to history
-        self.record_tool_result(call.get("id"), result.content)
+        backend.record_tool_result(call.get("id"), result.content)
         self.database.finish_step(name, "tool", {"outputs": result.data or result.content})
 
         result.show()
