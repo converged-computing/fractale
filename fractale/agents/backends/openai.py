@@ -67,6 +67,18 @@ class OpenAIBackend(LLMBackend):
             # No loop running, standard execution
             return asyncio.run(coro)
 
+    def record_tool_result(self, tool_call_id: str, result: Any):
+        """
+        Append the Tool's output to history.
+        """
+        self._history.append(
+            {
+                "role": "tool",
+                "tool_call_id": tool_call_id,
+                "content": json.dumps(result) if not isinstance(result, str) else result,
+            }
+        )
+
     def generate_response(
         self,
         prompt: str = None,
@@ -79,6 +91,10 @@ class OpenAIBackend(LLMBackend):
         """
         active_tools = None
         if use_tools:
+
+            # Memory HAS to be true because it will error to not save history
+            memory = True
+
             # Use the helper to resolve the async tool discovery synchronously
             if not self.tools:
                 self.tools = self._run_async(self.list_tools())
@@ -110,8 +126,13 @@ class OpenAIBackend(LLMBackend):
         tool_calls = []
         if choice.message.tool_calls:
             for tc in choice.message.tool_calls:
+                # IMPORTANT: OpenAI will mandate getting back the tool call response with the id
                 tool_calls.append(
-                    {"name": tc.function.name, "args": json.loads(tc.function.arguments)}
+                    {
+                        "id": tc.id,
+                        "name": tc.function.name,
+                        "args": json.loads(tc.function.arguments),
+                    }
                 )
 
         if memory:
