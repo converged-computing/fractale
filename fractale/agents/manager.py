@@ -182,8 +182,14 @@ class ManagerAgent(HelperAgent):
     async def ask_user(self, prompt, options=None, default=None):
         """
         Ask the user to respond to a question without blocking the event loop.
+
+        We first try to show structured output. For models that aren't as good, they do
+        not follow instructions, and we just prompt the user for a response to return.
         """
-        return await asyncio.to_thread(utils.get_user_input, prompt, options, default)
+        try:
+            return await asyncio.to_thread(utils.get_user_input, prompt, options, default)
+        except:
+            return await asyncio.to_thread(utils.ask_user_prompt(prompt))
 
     async def ask_validate_user(
         self, message, options=None, default=None, choices=None, is_markdown=True
