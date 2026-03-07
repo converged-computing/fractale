@@ -14,6 +14,6 @@ def main(args, extra, **kwargs):
         plan=args.plan,
         backend=args.backend,
         max_attempts=args.max_attempts,
-        database=get_database(),
+        database=get_database(args.database),
     )
     run_fractale(engine, args)

@@ -102,6 +102,9 @@ def get_parser():
     for command in [run, prompt, ls, agent]:
         command.add_argument("--mode", choices=["cli", "tui", "web"], default="cli")
         command.add_argument(
+            "--db", "--database", choices=["memory", "json"], default="memory", dest="database"
+        )
+        command.add_argument(
             "--engine", choices=["native", "langchain", "autogen"], default="native"
         )
         command.add_argument(

@@ -8,7 +8,7 @@ from rich import print
 import fractale.utils as utils
 
 
-class MemoryBackend:
+class MemoryBaseBackend:
     """
     A simple chronological event logger.
     Re-assembling the graph is just a matter of reading the list in order.
@@ -59,20 +59,47 @@ class MemoryBackend:
     def finish_step(self, name: str, step_type: str, data: dict):
         self.record("exit", name, step_type, data)
 
-    def save(self, data=None):
+
+class MemoryBackend(MemoryBaseBackend):
+    """
+    Call to save returns the formatted result
+    """
+
+    def save(self, data=None, uid=None):
+        """
+        Save results to json in PWD.
+        """
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        uid = uid or timestamp
+        results = {"events": self.events, "metrics": self.metrics}
+        if data:
+            results["metadata"] = data
+        return results
+
+
+class FilesystemBackend(MemoryBaseBackend):
+    """
+    Call to save saves to json filename
+    """
+
+    def save(self, data=None, uid=None):
         """
         Save results to json in PWD.
         """
         os.makedirs(".fractale", exist_ok=True)
+        # Save according to unique identifier or timestamp
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        path = os.path.join(".fractale", f"{timestamp}-events.json")
+        uid = uid or timestamp
+        path = os.path.join(".fractale", f"{uid}-events.json")
         print(f"💾 Saving results to {path}")
         results = {"events": self.events}
         if data:
-            results["machine"] = data
+            results["metadata"] = data
         utils.write_json(results, path)
-
         if not self.metrics:
             return
-        path = os.path.join(".fractale", f"{timestamp}-metrics.json")
+        results = {"metrics": self.metrics}
+        if data:
+            results["metadata"] = data
+        path = os.path.join(".fractale", f"{uid}-metrics.json")
         utils.write_json(self.metrics, path)
