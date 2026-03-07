@@ -131,6 +131,7 @@ class AgentBase:
         Routes the tool call to either the Local Registry or the Remote MCP Server.
         """
         from fractale.agents.base import backend
+
         result = None
         name = call["name"]
 
