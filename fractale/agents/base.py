@@ -148,10 +148,21 @@ class AgentBase:
                 result = await self.mcp_client.call_tool(name, call["args"])
 
         result = results.parse_response(result)
+
+        # Some APIs (e.g., OpenAI) require adding the tool result to history
+        self.record_tool_result(call.get("id"), result.content)
         self.database.finish_step(name, "tool", {"outputs": result.data or result.content})
 
         result.show()
         return result
+
+    def record_tool_result(self, tool_call_id: str, result: Any):
+        """
+        Called when a tool execution finishes.
+
+        Not required by Gemini, but required by others.
+        """
+        pass
 
     async def call_local_tool(self, name, args):
         """
