@@ -71,6 +71,8 @@ class OpenAIBackend(LLMBackend):
         """
         Append the Tool's output to history.
         """
+        if tool_call_id is None:
+            return
         self._history.append(
             {
                 "role": "tool",
