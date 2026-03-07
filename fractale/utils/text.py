@@ -161,6 +161,14 @@ def get_user_input(
         return try_again(answer, message, options, default)
 
 
+def ask_user_prompt(message: str) -> str:
+    """
+    If the LLM does not give the correct structure back, we fall back to showing the user the entire output.
+    """
+    console = Console()
+    return Prompt.ask(f"[bold yellow]The agent requests feedback[/bold yellow]\n{message}\n")
+
+
 def get_code_block(content, code_type=None):
     """
     Parse a code block from the response

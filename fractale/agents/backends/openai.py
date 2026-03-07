@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Tuple
 from openai import OpenAI
 
 from fractale.core.config import ModelConfig
+from fractale.db import get_database
 
 from .backend import LLMBackend
 
@@ -27,6 +28,7 @@ class OpenAIBackend(LLMBackend):
         self.client = OpenAI(api_key=self.api_key, base_url=self.base_url)
         self.tools = tools
         self._history = []
+        self.database = get_database()
 
     async def list_tools(self):
         """
@@ -123,5 +125,13 @@ class OpenAIBackend(LLMBackend):
                 "total_tokens": response.usage.total_tokens,
             }
 
-        # Return the actual values immediately
-        return content, usage, tool_calls
+        self.database.record_metric(
+            {
+                "use_tools": use_tools,
+                "metrics": usage,
+                "memory": memory,
+                "tools": tools,
+                "prompt": prompt,
+            }
+        )
+        return content, tool_calls
