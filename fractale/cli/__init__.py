@@ -122,7 +122,7 @@ def get_parser():
             help="register sub-agent tool",
             dest="subagent",
         )
-        command.add_argument("--backend", choices=["openai", "gemini", "llama"], default="gemini")
+        command.add_argument("--backend", choices=["openai", "gemini"], default="gemini")
 
     return parser
 

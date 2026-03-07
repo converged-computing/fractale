@@ -54,7 +54,7 @@ The following variables can be set in the environment.
 |-------|------------|---------------|
 | `FRACTALE_MCP_PORT` | Port MCP server is on, if using http variant | 8089 |
 | `FRACTALE_MCP_TOKEN` | Token for server | unset |
-| `FRACTALE_LLM_PROVIDER` | LLM Backend to use (gemini, openai, llama) | gemini |
+| `FRACTALE_LLM_PROVIDER` | LLM Backend to use (gemini, openai) | gemini |
 | `OPENAI_API_KEY` | API Key for an OpenAI model | unset |
 | `OPENAI_BASE_URL` | Base url for OpenAI | unset |
 | `GEMINI_API_KEY` | API key to use Google Gemini |
