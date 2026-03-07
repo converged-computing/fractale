@@ -27,9 +27,6 @@ class ModelConfig:
         if provider == "openai":
             api_key = os.environ.get("OPENAI_API_KEY")
             base_url = os.environ.get("OPENAI_BASE_URL")
-        elif provider == "llama":
-            api_key = os.environ.get("LLAMA_API_KEY")
-            base_url = os.environ.get("LLAMA_BASE_URL")
         elif provider == "gemini":
             api_key = os.environ.get("GEMINI_API_KEY")
 

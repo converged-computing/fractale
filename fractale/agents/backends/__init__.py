@@ -15,10 +15,3 @@ try:
     BACKENDS["openai"] = OpenAIBackend
 except ImportError:
     pass
-
-try:
-    from .llama import LlamaBackend
-
-    BACKENDS["llama"] = LlamaBackend
-except ImportError:
-    pass
