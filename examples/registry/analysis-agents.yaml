@@ -1,3 +1,4 @@
 tools:
-  - path: fractale.agents.parsers.ResultParserAgent
-  - path: fractale.agents.optimize.OptimizeAgent
+  - path: fractale_agents.parsers.ResultParserAgent
+  - path: fractale_agents.optimize.OptimizeAgent
+
