@@ -1,2 +1,2 @@
 tools:
-  - path: fractale.agents.parsers.ResultParserAgent
+  - path: fractale_agents.parsers.ResultParserAgent
