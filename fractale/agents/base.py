@@ -144,11 +144,15 @@ class AgentBase:
         # Check local registry (functions or classes with __call__) or fallback to MCP server
         self.database.start_step(name, "tool", {"inputs": call["args"]})
 
-        if self.registry.has(name):
-            result = await self.call_local_tool(name, call["args"])
-        else:
-            async with self.mcp_client:
-                result = await self.mcp_client.call_tool(name, call["args"])
+        # I have seen agents call tools that do not exist...
+        try:
+            if self.registry.has(name):
+                result = await self.call_local_tool(name, call["args"])
+            else:
+                async with self.mcp_client:
+                    result = await self.mcp_client.call_tool(name, call["args"])
+        except Exception as e:
+            result = f"ERROR: {e}"
 
         result = results.parse_response(result)
 
