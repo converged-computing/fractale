@@ -69,7 +69,9 @@ class Manager(StateMachineAgent):
             while loops < self.max_attempts:
                 result = sm.run_cycle()
                 tracker.append(result)
-                logger.info(f"🌀 State Machine Update: {result['transition']}.")
+                transition = result.get("transition")
+                if transition:
+                    logger.info(f"🌀 State Machine Update: {result['transition']}.")
 
                 # Are we done? We need to break from True
                 if result["state"] == "complete":
