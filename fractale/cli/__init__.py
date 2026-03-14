@@ -12,6 +12,7 @@ install()
 import fractale
 import fractale.agents as agents
 import fractale.core.registry as registry
+from fractale.db import get_database
 from fractale.logger import setup_logger
 
 
@@ -146,6 +147,9 @@ def run_fractale():
 
     # If an error occurs while parsing the arguments, the interpreter will exit with value 2
     args, extra = parser.parse_known_args()
+
+    # Ensure we are first to get/set database
+    get_database(args.database)
 
     # Config discovers from environment
     os.environ["FRACTALE_LLM_PROVIDER"] = args.backend
