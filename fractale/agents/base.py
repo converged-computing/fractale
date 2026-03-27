@@ -16,7 +16,6 @@ backend = None
 
 
 class AgentBase:
-
     def __init__(self):
         self.tool_map = {}
         self.prompt_map = {}
@@ -44,8 +43,8 @@ class AgentBase:
         token = os.environ.get("FRACTALE_MCP_TOKEN")
         url = f"http://127.0.0.1:{port}/mcp"
         headers = {"Authorization": token} if token else None
-        transport = StreamableHttpTransport(url=url, headers=headers)
-        self.mcp_client = Client(transport)
+        self.transport = StreamableHttpTransport(url=url, headers=headers)
+        self.mcp_client = Client(self.transport)
 
     def ask(self, prompt, memory=False):
         """
