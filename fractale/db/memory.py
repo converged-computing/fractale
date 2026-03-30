@@ -86,20 +86,23 @@ class FilesystemBackend(MemoryBaseBackend):
         """
         Save results to json in PWD.
         """
-        os.makedirs(".fractale", exist_ok=True)
-        # Save according to unique identifier or timestamp
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        outdir = os.path.join(".fractale", timestamp)
+        os.makedirs(outdir, exist_ok=True)
+        # Save according to unique identifier or timestamp
         uid = uid or timestamp
-        path = os.path.join(".fractale", f"{uid}-events.json")
+        path = os.path.join(outdir, f"{uid}-events.json")
         print(f"💾 Saving results to {path}")
+        # Events saved for orchestration
         results = {"events": self.events}
         if data:
             results["metadata"] = data
         utils.write_json(results, path)
+        # And metrics
         if not self.metrics:
             return
         results = {"metrics": self.metrics}
         if data:
             results["metadata"] = data
-        path = os.path.join(".fractale", f"{uid}-metrics.json")
+        path = os.path.join(outdir, f"{uid}-metrics.json")
         utils.write_json(self.metrics, path)
