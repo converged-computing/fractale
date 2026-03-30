@@ -3,6 +3,3 @@ tools:
   - path: flux_mcp.validate.flux_validate_batch_jobspec
     name: validate_flux_jobspec
 
-prompts:
-  - path: hpc_mcp.job.validate.validate_jobspec_expert
-  - path: hpc_mcp.job.transform.transform_jobspec_expert
