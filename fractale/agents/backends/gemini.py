@@ -1,7 +1,12 @@
 import asyncio
+import functools
+import logging
 import os
+import random
 import time
 from typing import Any, Dict, List, Tuple
+
+from google.genai.errors import ClientError, ServerError
 
 from fractale.core.config import ModelConfig
 from fractale.db import get_database
@@ -9,6 +14,53 @@ from fractale.db import get_database
 from .backend import LLMBackend
 
 default_model = "gemini-2.5-pro"
+
+logger = logging.getLogger(__name__)
+
+
+def retry_gemini(max_retries: int = 5, base_delay: float = 1.0, max_delay: float = 60.0):
+    """
+    Decorator for retrying Gemini API calls with exponential backoff and jitter.
+    Errors we should retry are 503 (Service Unavailable), 429 (too many requests),
+    500 (Internal Server error), 502 (Bad Gateway) and 504 (Gateway Timeout).
+
+    Args:
+        max_retries: Maximum number of attempts.
+        base_delay: Starting delay in seconds.
+        max_delay: Maximum cap for the delay.
+    """
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            retries = 0
+            while True:
+                try:
+                    return func(*args, **kwargs)
+                except (ServerError, ClientError) as e:
+                    # Extract status code
+                    status_code = getattr(e, "code", None) or getattr(e, "status_code", None)
+                    retryable_codes = [429, 500, 502, 503, 504]
+
+                    if status_code in retryable_codes and retries < max_retries:
+                        retries += 1
+                        # Exponential backoff: base * 2^n
+                        delay = min(base_delay * (2**retries), max_delay)
+                        # Add jitter: +/- 25% of the delay
+                        jitter = delay * 0.25 * (2 * random.random() - 1)
+                        sleep_time = max(0, delay + jitter)
+                        logger.warning(
+                            f"Gemini {status_code} error. Retrying in {sleep_time:.2f}s "
+                            f"(Attempt {retries}/{max_retries})..."
+                        )
+                        time.sleep(sleep_time)
+                    # Not candidate for retry or we hit max attempts
+                    else:
+                        raise e
+
+        return wrapper
+
+    return decorator
 
 
 class GeminiBackend(LLMBackend):
@@ -116,6 +168,7 @@ class GeminiBackend(LLMBackend):
 
         return tool_calls
 
+    @retry_gemini(max_retries=5)
     def generate_response(
         self,
         prompt: str = None,
