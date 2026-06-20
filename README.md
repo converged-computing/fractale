@@ -2,7 +2,7 @@
 
 > Agentic state-machine orchestrator to support MCP Tools and Science
 
-[![PyPI version](https://badge.fury.io/py/fractale-mcp.svg)](https://badge.fury.io/py/fractale-mcp)
+[![PyPI version](https://badge.fury.io/py/fractale.svg)](https://badge.fury.io/py/fractale)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19654652.svg)](https://doi.org/10.5281/zenodo.19654652)
 
 ![https://github.com/converged-computing/fractale/raw/main/img/fractale-small.png](https://github.com/converged-computing/fractale/raw/main/img/fractale-small.png)
